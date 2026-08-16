@@ -54,6 +54,7 @@ pnpm llm-pets get <slug>
 pnpm llm-pets get <slug> --registry petdex
 pnpm llm-pets get <slug> --registry https://example.com --overwrite
 pnpm llm-pets install extension
+pnpm llm-pets install extension-windows
 pnpm llm-pets install terminal
 ```
 
@@ -61,7 +62,7 @@ pnpm llm-pets install terminal
 
 Default registry is [CodexPetHub](https://codexpethub.com) (`codexpethub.install.v1` manifests). `--registry petdex` uses `https://petdex.dev/api/manifest`. Any other https base URL is tried as an install-manifest host, then as a petdex-style gallery.
 
-`install extension` packages the VSIX and installs it into `code` (and `cursor` if it is on PATH). `install terminal` compiles `llm-pets-terminal` then runs `node dist/main.js install`.
+`install extension` packages the VSIX and installs it into `code` (and `cursor` if it is on PATH). On Windows, use `install extension-windows`; its TypeScript installer runs the extension checks and build through pnpm, packages without VSCE's npm subprocess, and resolves `.cmd` editor launchers. `install terminal` compiles `llm-pets-terminal` then runs `node dist/main.js install`.
 
 After `pnpm compile`, the bin is `packages/llm-pets-cli/dist/cli.js`.
 
@@ -96,6 +97,12 @@ Not published on the Marketplace. From this repo:
 
 ```sh
 pnpm llm-pets install extension
+```
+
+On Windows, use the pnpm-only installer:
+
+```powershell
+pnpm llm-pets install extension-windows
 ```
 
 Or Command Palette → **Extensions: Install from VSIX...** and pick the file under `packages/llm-pets-extension/build/`.

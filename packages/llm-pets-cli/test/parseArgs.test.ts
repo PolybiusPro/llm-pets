@@ -25,6 +25,10 @@ describe("parseArgs", () => {
 
   it("parses install targets", () => {
     expect(parseArgs(["install", "extension"])).toEqual({ command: "install", target: "extension" });
+    expect(parseArgs(["install", "extension-windows"])).toEqual({
+      command: "install",
+      target: "extension-windows"
+    });
     expect(parseArgs(["install", "terminal"])).toEqual({ command: "install", target: "terminal" });
   });
 
@@ -41,7 +45,7 @@ describe("parseArgs", () => {
 
   it("rejects unknown commands", () => {
     expect(() => parseArgs(["dance"])).toThrow(/unknown command/i);
-    expect(() => parseArgs(["install"])).toThrow(/extension or terminal/i);
+    expect(() => parseArgs(["install"])).toThrow(/extension-windows/i);
     expect(() => parseArgs(["get"])).toThrow(/slug/i);
   });
 });

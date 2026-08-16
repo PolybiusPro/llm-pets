@@ -7,7 +7,7 @@ export type CliCommand =
       overwrite: boolean;
       petsDir?: string;
     }
-  | { command: "install"; target: "extension" | "terminal" };
+  | { command: "install"; target: "extension" | "extension-windows" | "terminal" };
 
 export function parseArgs(argv: string[]): CliCommand {
   const args = [...argv];
@@ -46,8 +46,8 @@ export function parseArgs(argv: string[]): CliCommand {
 
   if (command === "install") {
     const target = args.shift();
-    if (target !== "extension" && target !== "terminal") {
-      throw new Error("install requires extension or terminal");
+    if (target !== "extension" && target !== "extension-windows" && target !== "terminal") {
+      throw new Error("install requires extension, extension-windows, or terminal");
     }
     return { command: "install", target };
   }

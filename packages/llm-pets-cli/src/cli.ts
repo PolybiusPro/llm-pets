@@ -9,6 +9,7 @@ const HELP = `llm-pets — download Codex pets and install LLM Pets packages
 Usage:
   llm-pets get <slug> [--registry codexpethub|petdex|<url>] [--overwrite] [--pets-dir <dir>]
   llm-pets install extension
+  llm-pets install extension-windows
   llm-pets install terminal
   llm-pets --help
 
