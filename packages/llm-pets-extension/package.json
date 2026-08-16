@@ -1,0 +1,360 @@
+{
+  "name": "llm-pets-extension",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.1.0",
+  "publisher": "llm-pets-code-extension",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": {
+    "name": "yutat23"
+  },
+  "pricing": "Free",
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#071217",
+    "theme": "dark"
+  },
+  "keywords": [
+    "cursor",
+    "codex",
+    "pet",
+    "mascot",
+    "animation"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "pet.panelContainer",
+          "title": "%view.containerTitle%",
+          "icon": "media/collar.svg"
+        }
+      ]
+    },
+    "views": {
+      "pet.panelContainer": [
+        {
+          "id": "pet.panelView",
+          "name": "%view.name%",
+          "type": "webview",
+          "icon": "media/collar.svg",
+          "contextualTitle": "%extension.displayName%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pet.selectPet",
+        "title": "%command.changePet%",
+        "category": "%extension.displayName%",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "pet.selectBackground",
+        "title": "%command.changeBackground%",
+        "category": "%extension.displayName%",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "pet.selectCustomBackground",
+        "title": "%command.changeCustomBackground%",
+        "category": "%extension.displayName%",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "pet.selectBackgroundOpacity",
+        "title": "%command.changeBackgroundOpacity%",
+        "category": "%extension.displayName%",
+        "icon": "$(symbol-numeric)"
+      },
+      {
+        "command": "pet.selectAnimationSpeed",
+        "title": "%command.changeAnimationSpeed%",
+        "category": "%extension.displayName%",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "pet.selectSize",
+        "title": "%command.changeSize%",
+        "category": "%extension.displayName%",
+        "icon": "$(screen-full)"
+      },
+      {
+        "command": "pet.setIdle",
+        "title": "%command.setIdle%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.setRunning",
+        "title": "%command.setRunning%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.setWaiting",
+        "title": "%command.setWaiting%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.setReview",
+        "title": "%command.setReview%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.setFailed",
+        "title": "%command.setFailed%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.refreshPets",
+        "title": "%command.refreshPets%",
+        "category": "%extension.displayName%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pet.openPetsDirectory",
+        "title": "%command.openPetsDirectory%",
+        "category": "%extension.displayName%",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "pet.previewPet",
+        "title": "%command.openPetPreview%",
+        "category": "%extension.displayName%",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "pet.installHooks",
+        "title": "%command.installHooks%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.uninstallHooks",
+        "title": "%command.uninstallHooks%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "pet.openHooksConfiguration",
+        "title": "%command.openHooksConfiguration%",
+        "category": "%extension.displayName%"
+      }
+    ],
+    "menus": {
+      "webview/context": [
+        {
+          "command": "pet.selectPet",
+          "when": "(webviewId == 'pet.panelView' || webviewId == 'pet.preview') && webviewSection == 'pet'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pet.selectBackground",
+          "when": "(webviewId == 'pet.panelView' || webviewId == 'pet.preview') && webviewSection == 'pet'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pet.selectAnimationSpeed",
+          "when": "(webviewId == 'pet.panelView' || webviewId == 'pet.preview') && webviewSection == 'pet'",
+          "group": "navigation@5"
+        },
+        {
+          "command": "pet.selectSize",
+          "when": "(webviewId == 'pet.panelView' || webviewId == 'pet.preview') && webviewSection == 'pet'",
+          "group": "navigation@6"
+        },
+        {
+          "command": "pet.selectCustomBackground",
+          "when": "(webviewId == 'pet.panelView' || webviewId == 'pet.preview') && webviewSection == 'pet' && config.pet.background == custom",
+          "group": "navigation@3"
+        },
+        {
+          "command": "pet.selectBackgroundOpacity",
+          "when": "(webviewId == 'pet.panelView' || webviewId == 'pet.preview') && webviewSection == 'pet' && config.pet.background == custom",
+          "group": "navigation@4"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pet.refreshPets",
+          "when": "view == pet.panelView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "pet.openPetsDirectory",
+          "when": "view == pet.panelView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "pet.previewPet",
+          "when": "view == pet.panelView",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "pet.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.enabled%"
+        },
+        "pet.petDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "%config.petDirectory%"
+        },
+        "pet.scale": {
+          "default": 1,
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "auto"
+              ],
+              "enumDescriptions": [
+                "%size.autoDescription%"
+              ]
+            },
+            {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 3
+            }
+          ],
+          "description": "%config.scale%"
+        },
+        "pet.background": {
+          "type": "string",
+          "enum": [
+            "none",
+            "custom",
+            "arcade",
+            "autumn-forest",
+            "blue-sky",
+            "office",
+            "pro-office",
+            "grassland",
+            "japanese-festival",
+            "japanese-room",
+            "living-room",
+            "night-camp",
+            "night-city",
+            "space",
+            "rainy-cafe",
+            "treehouse",
+            "server-room",
+            "snowy-cabin",
+            "sunset",
+            "terminal",
+            "tropical-beach",
+            "underwater"
+          ],
+          "enumDescriptions": [
+            "%background.none%",
+            "%background.custom%",
+            "%background.arcade%",
+            "%background.autumnForest%",
+            "%background.blueSky%",
+            "%background.office%",
+            "%background.proOffice%",
+            "%background.grassland%",
+            "%background.japaneseFestival%",
+            "%background.japaneseRoom%",
+            "%background.livingRoom%",
+            "%background.nightCamp%",
+            "%background.nightCity%",
+            "%background.space%",
+            "%background.rainyCafe%",
+            "%background.treehouse%",
+            "%background.serverRoom%",
+            "%background.snowyCabin%",
+            "%background.sunset%",
+            "%background.terminal%",
+            "%background.tropicalBeach%",
+            "%background.underwater%"
+          ],
+          "default": "grassland",
+          "description": "%config.background%"
+        },
+        "pet.customBackground.imagePath": {
+          "type": "string",
+          "default": "",
+          "description": "%config.customBackgroundImagePath%"
+        },
+        "pet.customBackground.opacity": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "%config.customBackgroundOpacity%"
+        },
+        "pet.animationSpeed": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0.25,
+          "maximum": 3,
+          "description": "%config.animationSpeed%"
+        },
+        "pet.pauseWhenHidden": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.pauseWhenHidden%"
+        },
+        "pet.watchPetDirectory": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.watchPetDirectory%"
+        },
+        "pet.integrationMode": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "hooks"
+          ],
+          "enumDescriptions": [
+            "%integration.manual%",
+            "%integration.hooks%"
+          ],
+          "default": "manual",
+          "description": "%config.integrationMode%"
+        },
+        "pet.hookProvider": {
+          "type": "string",
+          "enum": [
+            "cursor",
+            "codex",
+            "claude"
+          ],
+          "enumDescriptions": [
+            "%hookProvider.cursor%",
+            "%hookProvider.codex%",
+            "%hookProvider.claude%"
+          ],
+          "default": "cursor",
+          "description": "%config.hookProvider%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run check && pnpm test && pnpm run build",
+    "build": "node esbuild.mjs --production",
+    "check": "tsc --noEmit",
+    "compile": "node esbuild.mjs",
+    "package": "mkdir -p build && vsce package --allow-missing-repository --no-rewrite-relative-links --out build/llm-pets-extension-$npm_package_version.vsix",
+    "deploy": "node scripts/deploy.mjs",
+    "test": "vitest run",
+    "watch": "node esbuild.mjs --watch"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "catalog:",
+    "esbuild": "catalog:"
+  }
+}

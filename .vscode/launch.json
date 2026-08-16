@@ -1,0 +1,17 @@
+{
+  "version": "2.0.0",
+  "configurations": [
+    {
+      "name": "Run LLM Pets",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/llm-pets-extension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/llm-pets-extension/dist/**/*.js"
+      ],
+      "preLaunchTask": "compile-extension"
+    }
+  ]
+}

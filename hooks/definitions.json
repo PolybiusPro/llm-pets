@@ -1,0 +1,89 @@
+{
+  "aliases": {
+    "sessionStart": "SessionStart",
+    "SessionStart": "SessionStart",
+    "beforeSubmitPrompt": "UserPromptSubmit",
+    "UserPromptSubmit": "UserPromptSubmit",
+    "preToolUse": "PreToolUse",
+    "PreToolUse": "PreToolUse",
+    "postToolUse": "PostToolUse",
+    "PostToolUse": "PostToolUse",
+    "postToolUseFailure": "PostToolUseFailure",
+    "PostToolUseFailure": "PostToolUseFailure",
+    "afterAgentThought": "AfterAgentThought",
+    "AfterAgentThought": "AfterAgentThought",
+    "afterAgentResponse": "AfterAgentResponse",
+    "AfterAgentResponse": "AfterAgentResponse",
+    "permissionRequest": "PermissionRequest",
+    "PermissionRequest": "PermissionRequest",
+    "stop": "Stop",
+    "Stop": "Stop",
+    "sessionEnd": "SessionEnd",
+    "SessionEnd": "SessionEnd",
+    "PreCompact": "PreCompact",
+    "PostCompact": "PostCompact",
+    "SubagentStart": "SubagentStart",
+    "SubagentStop": "SubagentStop",
+    "Notification": "Notification"
+  },
+  "transitions": {
+    "SessionStart": { "state": "idle" },
+    "UserPromptSubmit": { "state": "running" },
+    "PreToolUse": { "state": "running" },
+    "PostToolUse": { "state": "running" },
+    "PostToolUseFailure": { "state": "failed", "settleAfterMs": 5000 },
+    "AfterAgentThought": { "state": "running" },
+    "AfterAgentResponse": { "state": "review", "settleAfterMs": 3000 },
+    "PermissionRequest": { "state": "waiting" },
+    "Stop": { "state": "review", "settleAfterMs": 3000 },
+    "SessionEnd": { "state": "review", "settleAfterMs": 3000 },
+    "PreCompact": { "state": "running" },
+    "PostCompact": { "state": "running" },
+    "SubagentStart": { "state": "running" },
+    "SubagentStop": { "state": "running" },
+    "Notification": { "state": "waiting" }
+  },
+  "providers": {
+    "cursor": {
+      "events": [
+        "sessionStart",
+        "beforeSubmitPrompt",
+        "preToolUse",
+        "postToolUseFailure",
+        "afterAgentThought",
+        "afterAgentResponse",
+        "stop",
+        "sessionEnd"
+      ],
+      "entryStyle": "flat",
+      "setSchemaVersion": true
+    },
+    "codex": {
+      "events": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "PermissionRequest",
+        "Stop",
+        "SessionEnd"
+      ],
+      "entryStyle": "nested",
+      "setSchemaVersion": false
+    },
+    "claude": {
+      "events": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PermissionRequest",
+        "Stop",
+        "SessionEnd"
+      ],
+      "entryStyle": "nested",
+      "setSchemaVersion": false
+    }
+  }
+}

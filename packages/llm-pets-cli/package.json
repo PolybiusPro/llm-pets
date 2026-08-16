@@ -1,0 +1,23 @@
+{
+  "name": "llm-pets-cli",
+  "version": "1.0.0",
+  "description": "Download Codex pets into ~/.pets and install LLM Pets packages.",
+  "type": "module",
+  "bin": {
+    "llm-pets": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node dist/cli.js",
+    "build": "node esbuild.mjs",
+    "compile": "node esbuild.mjs",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "prestart": "node esbuild.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "catalog:"
+  }
+}

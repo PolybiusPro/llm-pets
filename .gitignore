@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+*.vsix
+coverage/
+*.log
+*.tsbuildinfo
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+packages/llm-pets-extension/scripts/hook.cjs

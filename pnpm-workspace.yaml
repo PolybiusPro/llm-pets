@@ -1,0 +1,23 @@
+packages:
+  - packages/*
+
+catalog:
+  "@types/node": ^24.13.3
+  "@types/vscode": ^1.125.0
+  "@vscode/vsce": ^3.9.2
+  esbuild: ^0.28.2
+  koffi: ^3.1.5
+  sharp: ^0.35.3
+  typescript: ^7.0.2
+  vitest: ^4.1.10
+
+catalogMode: prefer
+
+nodeLinker: hoisted
+
+allowBuilds:
+  esbuild: true
+  "@vscode/vsce-sign": true
+  keytar: true
+  sharp: true
+  koffi: true

@@ -1,0 +1,27 @@
+{
+  "name": "llm-pets-terminal",
+  "version": "1.0.0",
+  "description": "Linux terminal pet renderer for Codex and Claude Code.",
+  "type": "module",
+  "bin": {
+    "llm-pet": "./dist/main.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node dist/main.js",
+    "build": "node esbuild.mjs",
+    "compile": "node esbuild.mjs",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "prestart": "node esbuild.mjs"
+  },
+  "dependencies": {
+    "koffi": "catalog:",
+    "sharp": "catalog:"
+  },
+  "devDependencies": {
+    "esbuild": "catalog:"
+  }
+}

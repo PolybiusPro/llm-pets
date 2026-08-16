@@ -1,0 +1,38 @@
+{
+  "name": "llm-pets",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Monorepo for LLM Pets: Cursor/VS Code extension and Linux terminal renderer.",
+  "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "hooks:generate": "node hooks/scripts/generate-hook.mjs",
+    "test": "pnpm test:hooks && pnpm --recursive --if-present test",
+    "test:hooks": "vitest run hooks/test",
+    "test:extension": "pnpm --filter llm-pets-extension test",
+    "test:terminal": "pnpm --filter llm-pets-terminal test",
+    "test:terminal:visual": "node packages/llm-pets-terminal/scripts/visual-konsole.mjs",
+    "test:cli": "pnpm --filter llm-pets-cli test",
+    "check": "node hooks/scripts/generate-hook.mjs --check && pnpm --recursive --if-present check",
+    "compile": "pnpm hooks:generate && pnpm --recursive --if-present compile",
+    "build": "pnpm hooks:generate && pnpm --recursive --if-present build",
+    "llm-pets": "pnpm --filter llm-pets-cli compile && pnpm --filter llm-pets-cli exec node dist/cli.js"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.22.0",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.22.0"
+}
