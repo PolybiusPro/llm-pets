@@ -4,9 +4,11 @@ import { HookEventReceiver } from "./cursor/HookEventReceiver.js";
 import { getCursorHome, getEventDirectory, getHookScriptInstallPath } from "./cursor/cursorHome.js";
 import { HookInstaller } from "./cursor/HookInstaller.js";
 import {
-  HOOK_PROVIDERS,
   hookProviderLabel,
-  isHookProvider,
+  hookProvidersToUninstall,
+  isCursorHost,
+  nextHookProvider,
+  resolveHookProviderForHost,
   resolveHookProviderTarget,
   type HookProvider
 } from "./cursor/hookProvider.js";
@@ -53,6 +55,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   log(`CODEX_HOME: ${codexHome}`);
   log(`CURSOR_HOME: ${cursorHome}`);
+  log(`Host: ${vscode.env.appName} (${vscode.env.uriScheme})`);
   log(`Hook provider: ${readHookProvider()}`);
   log(`Pets directory: ${petsDirectories.join(", ")}`);
 
@@ -70,8 +73,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let provider: PetViewProvider;
   const providerLabel = (): string => hookProviderLabel(readHookProvider());
   const uninstallOtherHookProviders = async (keep: HookProvider): Promise<void> => {
-    for (const provider of HOOK_PROVIDERS) {
-      if (provider === keep) continue;
+    for (const provider of hookProvidersToUninstall(keep, runningInCursor())) {
       const installer = createHookInstaller(provider);
       if (await installer.isInstalled()) {
         const result = await installer.uninstall();
@@ -89,9 +91,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
   };
   const cycleHookProvider = async (): Promise<void> => {
-    const current = readHookProvider();
-    const nextIndex = (HOOK_PROVIDERS.indexOf(current) + 1) % HOOK_PROVIDERS.length;
-    const next = HOOK_PROVIDERS[nextIndex];
+    const next = nextHookProvider(readHookProvider(), runningInCursor());
     await vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).update(
       "hookProvider",
       next,
@@ -432,9 +432,13 @@ function readDisplayOptions(): {
   };
 }
 
+function runningInCursor(): boolean {
+  return isCursorHost(vscode.env.appName, vscode.env.uriScheme);
+}
+
 function readHookProvider(): HookProvider {
   const configured = vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).get<string>("hookProvider", "cursor");
-  return isHookProvider(configured) ? configured : "cursor";
+  return resolveHookProviderForHost(configured, runningInCursor());
 }
 
 function watchEnabled(): boolean {

@@ -31,6 +31,37 @@ export interface HookProviderTarget {
   setSchemaVersion: boolean;
 }
 
+export function isCursorHost(appName?: string, uriScheme?: string): boolean {
+  return appName?.toLowerCase() === "cursor" || uriScheme?.toLowerCase() === "cursor";
+}
+
+export function hookProvidersForHost(cursorHost: boolean): HookProvider[] {
+  return cursorHost ? ["cursor"] : HOOK_PROVIDERS.filter((provider) => provider !== "cursor");
+}
+
+export function hookProvidersToUninstall(keep: HookProvider, cursorHost: boolean): HookProvider[] {
+  const managed = hookProvidersForHost(cursorHost);
+  if (!managed.includes(keep)) {
+    return [];
+  }
+  return managed.filter((provider) => provider !== keep);
+}
+
+export function resolveHookProviderForHost(configured: unknown, cursorHost: boolean): HookProvider {
+  const available = hookProvidersForHost(cursorHost);
+  if (isHookProvider(configured) && available.includes(configured)) {
+    return configured;
+  }
+  return available[0] ?? "codex";
+}
+
+export function nextHookProvider(current: HookProvider, cursorHost: boolean): HookProvider {
+  const available = hookProvidersForHost(cursorHost);
+  const resolved = resolveHookProviderForHost(current, cursorHost);
+  const index = available.indexOf(resolved);
+  return available[(index + 1) % available.length] ?? resolved;
+}
+
 export function hookProviderLabel(provider: HookProvider): string {
   switch (provider) {
     case "cursor":

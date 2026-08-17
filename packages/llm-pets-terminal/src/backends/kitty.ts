@@ -43,6 +43,28 @@ export function freeImages(): Buffer {
   return graphicsCommand("a=d,d=A,q=2");
 }
 
+export function drawSequence(row: number, column: number, imageId: number): Buffer {
+  return Buffer.concat([
+    terminal.SYNC_BEGIN,
+    terminal.SAVE_CURSOR,
+    deletePlacements(),
+    Buffer.from(`\x1b[${row};${column}H`),
+    placeFrame(imageId),
+    terminal.RESTORE_CURSOR,
+    terminal.SYNC_END
+  ]);
+}
+
+export function eraseSequence(): Buffer {
+  return Buffer.concat([
+    terminal.SYNC_BEGIN,
+    terminal.SAVE_CURSOR,
+    freeImages(),
+    terminal.RESTORE_CURSOR,
+    terminal.SYNC_END
+  ]);
+}
+
 function validPng(filePath: string): boolean {
   try {
     return readFileSync(filePath).subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
@@ -135,30 +157,15 @@ export class KittyBackend {
     if (!placement) {
       return;
     }
-    const [row, column, imageRows, imageColumns] = placement;
+    const [row, column] = placement;
     terminal.writeAll(
       this.ttyFd,
-      Buffer.concat([
-        terminal.SYNC_BEGIN,
-        terminal.SAVE_CURSOR,
-        terminal.clearSequence(row, column, imageRows, imageColumns),
-        deletePlacements(),
-        Buffer.from(`\x1b[${row};${column}H`),
-        placeFrame(this.imageIds.get(index) ?? IMAGE_ID_BASE + index),
-        terminal.RESTORE_CURSOR,
-        terminal.SYNC_END
-      ])
+      drawSequence(row, column, this.imageIds.get(index) ?? IMAGE_ID_BASE + index)
     );
   }
 
   async erase(): Promise<void> {
     await this.ready;
-    const placement = terminal.region(this.ttyFd, this.cache.widthPx, this.cache.heightPx);
-    const parts = [terminal.SYNC_BEGIN, terminal.SAVE_CURSOR, freeImages()];
-    if (placement) {
-      parts.push(terminal.clearSequence(...placement));
-    }
-    parts.push(terminal.RESTORE_CURSOR, terminal.SYNC_END);
-    terminal.writeAll(this.ttyFd, Buffer.concat(parts));
+    terminal.writeAll(this.ttyFd, eraseSequence());
   }
 }
