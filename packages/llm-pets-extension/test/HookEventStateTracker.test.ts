@@ -9,7 +9,14 @@ import {
 } from "../src/cursor/HookEventStateTracker.js";
 
 function event(eventName: CursorHookEventName, sessionId = "session-a"): CursorHookEvent {
-  return { version: 1, eventName, sessionId, cwd: path.resolve("workspace"), occurredAt: Date.now() };
+  return {
+    version: 2,
+    provider: "cursor",
+    eventName,
+    sessionId,
+    cwd: path.resolve("workspace"),
+    occurredAt: Date.now()
+  };
 }
 
 describe("HookEventStateTracker", () => {
@@ -40,7 +47,8 @@ describe("HookEventStateTracker", () => {
 
   it("validates events and workspace containment", () => {
     expect(parseCursorHookEvent(event("SessionStart"))).toBeDefined();
-    expect(parseCursorHookEvent({ ...event("SessionStart"), version: 2 })).toBeUndefined();
+    expect(parseCursorHookEvent({ ...event("SessionStart"), version: 1 })).toBeUndefined();
+    expect(parseCursorHookEvent({ ...event("SessionStart"), provider: "gemini" })).toBeUndefined();
     expect(parseCursorHookEvent({ ...event("SessionStart"), eventName: "sessionStart" })).toMatchObject({
       eventName: "SessionStart"
     });

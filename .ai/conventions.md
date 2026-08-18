@@ -28,7 +28,7 @@ src/cursor/      Hook providers, config merge, event spool
 src/pet/         Pet discovery, loading, and state
 src/webview/     Panel HTML, backgrounds, sizes, host↔webview messages
 src/extension.ts Activation and commands
-scripts/hook.cjs          Copied from root hooks/ at compile (shipped in the VSIX)
+scripts/extension-hook.cjs Copied from root hooks/ at compile (shipped in the VSIX)
 scripts/deploy.mjs            Local VSIX install (not packaged)
 test/            Vitest, one file per unit
 ```
@@ -41,8 +41,9 @@ TypeScript is `tsc --noEmit` (ES2025, NodeNext) and esbuild from `src/extension.
 definitions.json          Event aliases, transitions, and provider event lists
 src/index.ts              Shared parser, state tracker, and JSON merge/remove helpers
 hook.template.cjs         Dependency-free hook template
-hook.cjs                  Generated script installed for every provider
-scripts/generate-hook.mjs Regenerates and checks hook.cjs
+extension-hook.cjs        Generated persistent extension entrypoint
+require('./terminal-hook.cjs') terminal-hook js` as session-only entry point
+scripts/generate-hook.mjs Regenerates both hooks and the Claude plugin definition
 test/                     Shared protocol and script tests
 ```
 
@@ -55,11 +56,12 @@ src/main.ts              run / probe / check / pane / wrap / install
 src/daemon.ts src/events.ts src/terminal.ts src/posix.ts
 src/hosts.ts src/sprites.ts src/tmuxpane.ts src/install.ts
 src/backends/kitty.ts src/backends/blocks.ts
+claude-plugin/            Inert session plugin passed only through --plugin-dir
 test/*.test.ts           synthetic sheets; do not open a real terminal
 scripts/visual-konsole.mjs
 ```
 
-Runtime paths are XDG: events and locks under `~/.local/state/llm-pets/`, probe cache and frames under `~/.cache/llm-pets/`. Sprites are not shipped.
+Runtime paths are XDG: extension events under `~/.local/state/llm-pets/extension-events/<provider>/`; terminal events under `$XDG_RUNTIME_DIR/llm-pets-UID/session-*/events/`; locks under `~/.local/state/llm-pets/runtime/`; probe cache and frames under `~/.cache/llm-pets/`. Sprites are not shipped.
 
 ## Naming
 
@@ -71,7 +73,7 @@ Runtime paths are XDG: events and locks under `~/.local/state/llm-pets/`, probe 
 - Pet states: `idle`, `running`, `waiting`, `review`, `failed`
 - TypeScript imports use `.js` extensions (NodeNext)
 - Hook provider ids: `cursor`, `codex`, `claude`. Integration modes: `manual`, `hooks`
-- Cursor hook events are camelCase; Codex and Claude are PascalCase. The shared hook canonicalizes both to PascalCase in the spool.
+- Cursor hook events are camelCase; Codex and Claude are PascalCase. Both hooks canonicalize them to PascalCase in version 2 events with a required provider field.
 
 ## Testing
 

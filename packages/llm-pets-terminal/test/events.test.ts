@@ -13,7 +13,8 @@ async function writeEvent(
 ): Promise<void> {
   const stem = `${Date.now()}-${name}-${session}-${readdirSync(directory).length}`;
   const payload = {
-    version: 1,
+    version: 2,
+    provider: "codex",
     eventName: name,
     sessionId: session,
     cwd: os.homedir(),

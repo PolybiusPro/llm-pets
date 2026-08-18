@@ -1,15 +1,18 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { HookEventReceiver } from "./cursor/HookEventReceiver.js";
-import { getCursorHome, getEventDirectory, getHookScriptInstallPath } from "./cursor/cursorHome.js";
-import { HookInstaller } from "./cursor/HookInstaller.js";
+import {
+  getCursorHome,
+  getExtensionEventDirectory,
+  getExtensionHookScriptInstallPath,
+  getLegacyHookScriptInstallPath
+} from "./cursor/cursorHome.js";
+import { HookReconciler, type HookReconcileResult } from "./cursor/HookReconciler.js";
 import {
   hookProviderLabel,
-  hookProvidersToUninstall,
   isCursorHost,
   nextHookProvider,
   resolveHookProviderForHost,
-  resolveHookProviderTarget,
   type HookProvider
 } from "./cursor/hookProvider.js";
 import { getStrings } from "./localization.js";
@@ -36,6 +39,7 @@ const SELECTED_PET_KEY = "pet.selectedPet";
 const HOOK_EVENT_OBSERVED_KEY = "pet.hookEventObserved";
 const LEGACY_SELECTED_PET_KEY = "cursorPet.selectedPet";
 const LEGACY_HOOK_EVENT_OBSERVED_KEY = "cursorPet.hookEventObserved";
+type HookObservationMap = Partial<Record<HookProvider, boolean>>;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await migrateLegacyCursorPetSettings();
@@ -61,33 +65,53 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const savedPetId = context.globalState.get<string>(SELECTED_PET_KEY);
   const repository = new PetRepository(new PetLoader(petsDirectories), savedPetId);
-  const bundledHookScript = context.asAbsolutePath(path.join("scripts", "hook.cjs"));
-  const createHookInstaller = (provider = readHookProvider()): HookInstaller =>
-    new HookInstaller(
-      resolveHookProviderTarget(provider),
-      bundledHookScript,
-      getHookScriptInstallPath()
-    );
-  let hookInstaller = createHookInstaller();
-  let hookEventObserved = context.globalState.get<boolean>(HOOK_EVENT_OBSERVED_KEY, false);
+  const bundledHookScript = context.asAbsolutePath(path.join("scripts", "extension-hook.cjs"));
+  const hookReconciler = new HookReconciler(
+    runningInCursor(),
+    bundledHookScript,
+    getExtensionHookScriptInstallPath(),
+    getLegacyHookScriptInstallPath()
+  );
+  let hookEventsObserved = readHookObservations(context.globalState.get<unknown>(HOOK_EVENT_OBSERVED_KEY));
   let provider: PetViewProvider;
   const providerLabel = (): string => hookProviderLabel(readHookProvider());
-  const uninstallOtherHookProviders = async (keep: HookProvider): Promise<void> => {
-    for (const provider of hookProvidersToUninstall(keep, runningInCursor())) {
-      const installer = createHookInstaller(provider);
-      if (await installer.isInstalled()) {
-        const result = await installer.uninstall();
-        log(`Removed LLM Pets hooks from ${result.hooksPath}`);
+  const reportHookResults = (
+    action: "Installed" | "Removed",
+    results: HookReconcileResult[],
+    notifyFailures: boolean
+  ): void => {
+    for (const result of results) {
+      if (result.result) {
+        log(`${action} ${hookProviderLabel(result.provider)} LLM Pets hooks in ${result.result.hooksPath}`);
+      } else {
+        log(`Could not ${action.toLowerCase()} ${hookProviderLabel(result.provider)} hooks: ${String(result.error)}`);
       }
     }
+    const failures = results.filter((result) => result.error !== undefined);
+    if (notifyFailures && failures.length > 0) {
+      const detail = failures
+        .map((result) => `${hookProviderLabel(result.provider)}: ${String(result.error)}`)
+        .join("; ");
+      const message = action === "Installed"
+        ? strings.notifications.hooksInstallFailed(detail)
+        : strings.notifications.hooksRemoveFailed(detail);
+      void vscode.window.showWarningMessage(message);
+    }
+  };
+  const installExtensionHooks = async (notifyFailures: boolean): Promise<void> => {
+    reportHookResults("Installed", await hookReconciler.installAvailable(), notifyFailures);
+  };
+  const uninstallExtensionHooks = async (notifyFailures: boolean): Promise<void> => {
+    reportHookResults("Removed", await hookReconciler.uninstallAvailable(), notifyFailures);
   };
   const showHooksHelp = async (): Promise<void> => {
+    const selectedInstaller = hookReconciler.installer(readHookProvider());
     const choice = await vscode.window.showInformationMessage(
-      strings.hooks.helpMessage(hookInstaller.hooksPath, providerLabel()),
+      strings.hooks.helpMessage(selectedInstaller.hooksPath, providerLabel()),
       strings.hooks.openConfiguration
     );
     if (choice === strings.hooks.openConfiguration) {
-      await vscode.window.showTextDocument(vscode.Uri.file(hookInstaller.hooksPath));
+      await vscode.window.showTextDocument(vscode.Uri.file(selectedInstaller.hooksPath));
     }
   };
   const cycleHookProvider = async (): Promise<void> => {
@@ -99,41 +123,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
   };
   const setupHooks = async (): Promise<void> => {
-    hookInstaller = createHookInstaller();
-    const choice = await vscode.window.showWarningMessage(
-      strings.hooks.confirmTitle(providerLabel()),
-      { modal: true, detail: strings.hooks.confirmMessage(hookInstaller.hooksPath, hookInstaller.scriptPath, providerLabel()) },
-      strings.hooks.enable
+    await vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).update(
+      "integrationMode",
+      "hooks",
+      vscode.ConfigurationTarget.Global
     );
-    if (choice !== strings.hooks.enable) return;
-    try {
-      await uninstallOtherHookProviders(readHookProvider());
-      hookInstaller = createHookInstaller();
-      const result = await hookInstaller.install();
-      hookEventObserved = false;
-      await context.globalState.update(HOOK_EVENT_OBSERVED_KEY, false);
-      log(`Installed LLM Pets hooks in ${result.hooksPath}`);
-      await vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).update(
-        "integrationMode",
-        "hooks",
-        vscode.ConfigurationTarget.Global
-      );
-      await provider.setHookIntegrationState("awaitingTrust");
-      const next = await vscode.window.showInformationMessage(
-        strings.hooks.installedMessage(providerLabel()),
-        strings.hooks.openConfiguration
-      );
-      if (next === strings.hooks.openConfiguration) {
-        await vscode.window.showTextDocument(vscode.Uri.file(result.hooksPath));
-      }
-    } catch (error) {
-      log(`Could not install LLM Pets hooks: ${String(error)}`);
-      void vscode.window.showErrorMessage(
-        strings.notifications.hooksInstallFailed(
-          strings.translateError(error instanceof Error ? error.message : String(error))
-        )
-      );
-    }
+    await installExtensionHooks(true);
+    await refreshHookIntegrationStatus();
   };
   provider = new PetViewProvider(
     context.extensionUri,
@@ -155,14 +151,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let hookEventReceiver: HookEventReceiver | undefined;
   const refreshHookIntegrationStatus = async (): Promise<void> => {
     try {
-      const installed = await hookInstaller.isInstalled();
+      const selectedProvider = readHookProvider();
+      const installed = await hookReconciler.isInstalled(selectedProvider);
       const hooksMode = vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).get<string>(
         "integrationMode",
-        "manual"
+        "hooks"
       ) === "hooks";
       await provider.setHookIntegrationState(
         installed && hooksMode
-          ? hookEventObserved ? "active" : "awaitingTrust"
+          ? hookEventsObserved[selectedProvider] ? "active" : "awaitingTrust"
           : "notConfigured"
       );
     } catch (error) {
@@ -170,24 +167,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await provider.setHookIntegrationState("notConfigured");
     }
   };
-  void refreshHookIntegrationStatus();
 
   const startHookReceiver = async (): Promise<void> => {
     if (hookEventReceiver) return;
+    const selectedProvider = readHookProvider();
     const workspaceRoots = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
     if (workspaceRoots.length === 0) {
       log("Hooks integration is waiting for a workspace folder.");
       return;
     }
     hookEventReceiver = new HookEventReceiver({
-      eventDirectory: getEventDirectory(),
+      eventDirectory: getExtensionEventDirectory(selectedProvider),
+      provider: selectedProvider,
       workspaceRoots,
       log,
       onPetState: (state) => void provider.setState(state),
       onEventReceived: () => {
-        if (hookEventObserved) return;
-        hookEventObserved = true;
-        void context.globalState.update(HOOK_EVENT_OBSERVED_KEY, true);
+        if (hookEventsObserved[selectedProvider]) return;
+        hookEventsObserved = { ...hookEventsObserved, [selectedProvider]: true };
+        void context.globalState.update(HOOK_EVENT_OBSERVED_KEY, hookEventsObserved);
         void provider.setHookIntegrationState("active");
       }
     });
@@ -206,13 +204,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     hookEventReceiver?.dispose();
     hookEventReceiver = undefined;
   };
-  const reconcileIntegration = (): void => {
-    const mode = vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).get<string>("integrationMode", "manual");
+  const restartHookReceiver = async (): Promise<void> => {
+    stopHookReceiver();
+    await provider.setState("idle");
+    await startHookReceiver();
+  };
+  const reconcileIntegration = async (notifyFailures = false): Promise<void> => {
+    const mode = vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).get<string>("integrationMode", "hooks");
     if (mode === "hooks") {
-      void startHookReceiver();
+      await installExtensionHooks(notifyFailures);
+      await startHookReceiver();
     } else {
       stopHookReceiver();
+      await provider.setState("idle");
+      await uninstallExtensionHooks(notifyFailures);
     }
+    await refreshHookIntegrationStatus();
   };
 
   const watchers = petsDirectories.map((directory) =>
@@ -269,31 +276,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await setupHooks();
     }),
     vscode.commands.registerCommand("pet.uninstallHooks", async () => {
-      try {
-        hookInstaller = createHookInstaller();
-        const result = await hookInstaller.uninstall();
-        log(`Removed LLM Pets hooks from ${result.hooksPath}`);
-        stopHookReceiver();
-        hookEventObserved = false;
-        await context.globalState.update(HOOK_EVENT_OBSERVED_KEY, false);
-        const configuration = vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION);
-        if (configuration.get<string>("integrationMode") === "hooks") {
-          await configuration.update("integrationMode", "manual", vscode.ConfigurationTarget.Global);
-        }
-        await provider.setHookIntegrationState("notConfigured");
-        void vscode.window.showInformationMessage(strings.notifications.hooksRemoved);
-      } catch (error) {
-        log(`Could not remove LLM Pets hooks: ${String(error)}`);
-        void vscode.window.showErrorMessage(
-          strings.notifications.hooksRemoveFailed(
-            strings.translateError(error instanceof Error ? error.message : String(error))
-          )
-        );
-      }
+      await vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).update(
+        "integrationMode",
+        "manual",
+        vscode.ConfigurationTarget.Global
+      );
+      stopHookReceiver();
+      await uninstallExtensionHooks(true);
+      hookEventsObserved = {};
+      await context.globalState.update(HOOK_EVENT_OBSERVED_KEY, hookEventsObserved);
+      await provider.setHookIntegrationState("notConfigured");
+      void vscode.window.showInformationMessage(strings.notifications.hooksRemoved);
     }),
     vscode.commands.registerCommand("pet.openHooksConfiguration", async () => {
-      hookInstaller = createHookInstaller();
-      await vscode.window.showTextDocument(vscode.Uri.file(hookInstaller.hooksPath));
+      const installer = hookReconciler.installer(readHookProvider());
+      await vscode.window.showTextDocument(vscode.Uri.file(installer.hooksPath));
     }),
     vscode.commands.registerCommand("pet.focusPet", () =>
       vscode.commands.executeCommand(`${PetViewProvider.viewType}.focus`)
@@ -336,20 +333,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
       }
       if (event.affectsConfiguration(`${PET_CONFIGURATION_SECTION}.integrationMode`)) {
-        reconcileIntegration();
-        void refreshHookIntegrationStatus();
+        void reconcileIntegration(true);
       }
       if (event.affectsConfiguration(`${PET_CONFIGURATION_SECTION}.hookProvider`)) {
-        hookInstaller = createHookInstaller();
         log(`Hook provider: ${readHookProvider()}`);
-        void refreshHookIntegrationStatus();
         void provider.setHookProviderState(readHookProvider(), providerLabel());
+        if (vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).get<string>("integrationMode", "hooks") === "hooks") {
+          void restartHookReceiver().then(refreshHookIntegrationStatus);
+        } else {
+          void refreshHookIntegrationStatus();
+        }
       }
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       if (vscode.workspace.getConfiguration(PET_CONFIGURATION_SECTION).get<string>("integrationMode") === "hooks") {
-        stopHookReceiver();
-        void startHookReceiver();
+        void restartHookReceiver();
       }
     }),
     {
@@ -362,7 +360,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     status
   );
-  reconcileIntegration();
+  await reconcileIntegration();
 }
 
 function configurationTarget(name: ConfigurationTargetName): vscode.ConfigurationTarget {
@@ -461,3 +459,10 @@ function statusIcon(state: PetState): string {
 }
 
 export function deactivate(): void {}
+
+function readHookObservations(value: unknown): HookObservationMap {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(([, observed]) => observed === true)
+  ) as HookObservationMap;
+}

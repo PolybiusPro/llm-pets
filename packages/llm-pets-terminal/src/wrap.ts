@@ -1,11 +1,19 @@
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readlinkSync, renameSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readlinkSync,
+  rmSync,
+  statSync
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
   hookCommand,
   hookProviderDefinition,
-  mergePetHooks,
   type HookProvider
 } from "../../../hooks/index.js";
 import { probeKittyGraphics, storeProbe } from "./terminal.js";
@@ -18,12 +26,31 @@ export type WrappedHookProvider = Exclude<HookProvider, "cursor">;
 type WrappedAgentResult = {
   error?: Error;
   status: number | null;
+  signal?: NodeJS.Signals | null;
+};
+
+export type WrappedSession = {
+  directory: string;
+  environment: NodeJS.ProcessEnv;
+  agentArgs: string[];
+};
+
+export type RendererHandle = {
+  stop(): void;
 };
 
 export type WrapDependencies = {
-  configureHooks?: (agent: string) => string | undefined;
-  startRenderer?: () => void;
-  runAgent?: (agent: string, agentArgs: string[]) => WrappedAgentResult;
+  environment?: NodeJS.ProcessEnv;
+  ttys?: { stdin: boolean; stdout: boolean };
+  tty?: string;
+  createSession?: (provider: WrappedHookProvider, agentArgs: string[], environment: NodeJS.ProcessEnv) => WrappedSession;
+  startRenderer?: (environment: NodeJS.ProcessEnv, eventDirectory: string) => RendererHandle;
+  runAgent?: (
+    agent: string,
+    agentArgs: string[],
+    environment: NodeJS.ProcessEnv
+  ) => WrappedAgentResult | Promise<WrappedAgentResult>;
+  cleanupSession?: (directory: string) => void;
 };
 
 export function hookProviderForAgent(agent: string): WrappedHookProvider | undefined {
@@ -31,33 +58,103 @@ export function hookProviderForAgent(agent: string): WrappedHookProvider | undef
   return name === "codex" || name === "claude" ? name : undefined;
 }
 
-export function configureWrappedAgentHooks(
-  agent: string,
+export function hooksExplicitlyDisabled(provider: WrappedHookProvider, agentArgs: readonly string[]): boolean {
+  if (provider === "claude") {
+    return agentArgs.includes("--bare") || agentArgs.includes("--safe-mode");
+  }
+  for (let index = 0; index < agentArgs.length; index += 1) {
+    const argument = agentArgs[index];
+    if (argument === "--disable" && agentArgs[index + 1] === "hooks") return true;
+    if (argument === "--disable=hooks") return true;
+    if (argument !== "-c" && argument !== "--config") continue;
+    const override = agentArgs[index + 1]?.replaceAll(" ", "").toLowerCase();
+    if (override === "features.hooks=false" || override === "features.codex_hooks=false") return true;
+  }
+  return false;
+}
+
+function dataHome(environment: NodeJS.ProcessEnv, homeDirectory: string): string {
+  return environment.XDG_DATA_HOME?.trim() || path.join(homeDirectory, ".local", "share");
+}
+
+function sessionRoot(environment: NodeJS.ProcessEnv): string {
+  const uid = typeof process.getuid === "function" ? process.getuid() : process.pid;
+  const base = environment.XDG_RUNTIME_DIR?.trim() || os.tmpdir();
+  return path.join(base, `llm-pets-${uid}`);
+}
+
+function pruneSessionDirectories(root: string): void {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  try {
+    for (const name of readdirSync(root)) {
+      const candidate = path.join(root, name);
+      try {
+        if (statSync(candidate).mtimeMs < cutoff) rmSync(candidate, { recursive: true, force: true });
+      } catch {
+        // Another wrapper may be cleaning the same abandoned session.
+      }
+    }
+  } catch {
+    // The root is created immediately below.
+  }
+}
+
+function codexHookValue(command: string): string {
+  return `[{ hooks = [{ type = "command", command = ${JSON.stringify(command)}, timeout = 5, statusMessage = "LLM Pets", async = true }] }]`;
+}
+
+export function terminalHookArguments(
+  provider: WrappedHookProvider,
   environment: NodeJS.ProcessEnv = process.env,
   homeDirectory = environment.HOME?.trim() || os.homedir()
-): string | undefined {
-  const provider = hookProviderForAgent(agent);
-  if (!provider) return undefined;
-
-  const dataHome = environment.XDG_DATA_HOME?.trim() || path.join(homeDirectory, ".local", "share");
-  const scriptPath = path.join(dataHome, "llm-pets", "hook.cjs");
+): { args: string[]; scriptPath: string } {
+  const root = path.join(dataHome(environment, homeDirectory), "llm-pets");
+  const scriptPath = path.join(root, "terminal-hook.cjs");
   if (!existsSync(scriptPath)) {
     throw new Error(`hook script is missing: ${scriptPath}`);
   }
-
-  const providerHome = provider === "codex"
-    ? environment.CODEX_HOME?.trim() || path.join(homeDirectory, ".codex")
-    : environment.CLAUDE_CONFIG_DIR?.trim() || path.join(homeDirectory, ".claude");
-  const configPath = path.join(providerHome, provider === "codex" ? "hooks.json" : "settings.json");
-  const existing = readJsonObject(configPath);
+  if (provider === "claude") {
+    const pluginPath = path.join(root, "claude-terminal-plugin");
+    if (!existsSync(pluginPath)) throw new Error(`Claude plugin is missing: ${pluginPath}`);
+    return { args: ["--plugin-dir", pluginPath], scriptPath };
+  }
   const definition = hookProviderDefinition(provider);
-  const merged = mergePetHooks(existing, hookCommand(scriptPath), definition.events, {
-    entryStyle: definition.entryStyle,
-    setSchemaVersion: definition.setSchemaVersion,
-    async: true
-  });
-  atomicWriteJson(configPath, merged);
-  return configPath;
+  const command = hookCommand(scriptPath, provider);
+  const args = ["--dangerously-bypass-hook-trust"];
+  for (const eventName of definition.events) {
+    args.push("-c", `hooks.${eventName}=${codexHookValue(command)}`);
+  }
+  return { args, scriptPath };
+}
+
+export function createWrappedSession(
+  provider: WrappedHookProvider,
+  agentArgs: string[],
+  environment: NodeJS.ProcessEnv = process.env
+): WrappedSession {
+  const homeDirectory = environment.HOME?.trim() || os.homedir();
+  const root = sessionRoot(environment);
+  pruneSessionDirectories(root);
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const directory = mkdtempSync(path.join(root, "session-"));
+  chmodSync(directory, 0o700);
+  const eventDirectory = path.join(directory, "events");
+  mkdirSync(eventDirectory, { mode: 0o700 });
+  try {
+    const hook = terminalHookArguments(provider, environment, homeDirectory);
+    return {
+      directory,
+      environment: {
+        ...environment,
+        LLM_PETS_EVENT_DIR: eventDirectory,
+        LLM_PETS_TERMINAL_HOOK: hook.scriptPath
+      },
+      agentArgs: [...hook.args, ...agentArgs]
+    };
+  } catch (error) {
+    rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 export function wrapperAction(
@@ -90,85 +187,139 @@ export function controllingTty(): string | undefined {
 }
 
 export function startFromWrapper(
-  env: NodeJS.Dict<string> = process.env,
-  spawnRenderer: (args: string[]) => void = spawnSelf,
+  env: NodeJS.ProcessEnv = process.env,
+  spawnRenderer: (args: string[], environment: NodeJS.ProcessEnv) => ChildProcess | undefined = spawnSelf,
   ttys = { stdin: Boolean(process.stdin.isTTY), stdout: Boolean(process.stdout.isTTY) },
-  tty = controllingTty()
-): void {
+  tty = controllingTty(),
+  eventDirectory = env.LLM_PETS_EVENT_DIR
+): RendererHandle {
   const action = wrapperAction(env, ttys);
   if (action === "skip") {
-    return;
+    return { stop: () => undefined };
   }
   if (action === "pane") {
-    spawnRenderer(["pane", "--ensure"]);
-    return;
+    const args = ["pane", "--ensure"];
+    if (eventDirectory) args.push("--event-dir", eventDirectory);
+    spawnRenderer(args, env);
+    return {
+      stop: () => {
+        spawnSelfSync(["pane"], env);
+      }
+    };
   }
   const probed = probeKittyGraphics();
   if (probed !== undefined) {
     storeProbe(probed, env);
   }
   if (tty?.startsWith("/dev/pts/")) {
-    spawnRenderer(["run", "--tty", tty]);
+    const args = ["run", "--tty", tty];
+    if (eventDirectory) args.push("--event-dir", eventDirectory);
+    const child = spawnRenderer(args, env);
+    return { stop: () => child?.kill("SIGTERM") };
   }
+  return { stop: () => undefined };
 }
 
-function spawnSelf(args: string[]): void {
+function spawnSelf(args: string[], environment: NodeJS.ProcessEnv): ChildProcess | undefined {
   const entry = process.argv[1];
   if (!entry) {
-    return;
+    return undefined;
   }
   const child = spawn(process.execPath, [entry, ...args], {
-    detached: true,
     stdio: "ignore",
-    env: process.env
+    env: environment
   });
-  child.unref();
+  child.on("error", () => undefined);
+  return child;
 }
 
-function readJsonObject(filePath: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, "utf8")) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error(`hook configuration must contain a JSON object: ${filePath}`);
+function spawnSelfSync(args: string[], environment: NodeJS.ProcessEnv): void {
+  const entry = process.argv[1];
+  if (entry) spawnSync(process.execPath, [entry, ...args], { stdio: "ignore", env: environment });
+}
+
+function runWrappedAgent(
+  agent: string,
+  agentArgs: string[],
+  environment: NodeJS.ProcessEnv
+): Promise<WrappedAgentResult> {
+  return new Promise((resolve) => {
+    const child = spawn(agent, agentArgs, { stdio: "inherit", env: environment });
+    const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
+    const handlers = new Map<NodeJS.Signals, () => void>();
+    const cleanup = (): void => {
+      for (const [signal, handler] of handlers) process.off(signal, handler);
+    };
+    for (const signal of signals) {
+      const handler = (): void => {
+        child.kill(signal);
+      };
+      handlers.set(signal, handler);
+      process.on(signal, handler);
     }
-    return parsed as Record<string, unknown>;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
-    if (error instanceof SyntaxError) {
-      throw new Error(`hook configuration is not valid JSON: ${filePath}: ${error.message}`);
-    }
-    throw error;
-  }
+    child.once("error", (error) => {
+      cleanup();
+      resolve({ error, status: null });
+    });
+    child.once("exit", (status, signal) => {
+      cleanup();
+      resolve({ status, signal });
+    });
+  });
 }
 
-function atomicWriteJson(filePath: string, value: unknown): void {
-  const serialized = `${JSON.stringify(value, null, 2)}\n`;
+export async function wrap(
+  agent: string,
+  agentArgs: string[],
+  dependencies: WrapDependencies = {}
+): Promise<number> {
+  const environment = dependencies.environment ?? process.env;
+  const provider = hookProviderForAgent(agent);
+  const ttys = dependencies.ttys ?? {
+    stdin: Boolean(process.stdin.isTTY),
+    stdout: Boolean(process.stdout.isTTY)
+  };
+  const runAgent = dependencies.runAgent ?? runWrappedAgent;
+  if (!provider || wrapperAction(environment, ttys) === "skip" || hooksExplicitlyDisabled(provider, agentArgs)) {
+    return resultCode(await runAgent(agent, agentArgs, environment));
+  }
+
+  let session: WrappedSession;
   try {
-    if (readFileSync(filePath, "utf8") === serialized) return;
+    session = (dependencies.createSession ?? createWrappedSession)(provider, agentArgs, environment);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    console.error(`llm-pet: could not configure session hooks for ${agent}: ${error instanceof Error ? error.message : error}`);
+    return resultCode(await runAgent(agent, agentArgs, environment));
   }
-  mkdirSync(path.dirname(filePath), { recursive: true });
-  const temporaryPath = `${filePath}.llm-pet-${process.pid}.tmp`;
-  writeFileSync(temporaryPath, serialized, "utf8");
-  renameSync(temporaryPath, filePath);
-}
 
-function runWrappedAgent(agent: string, agentArgs: string[]): WrappedAgentResult {
-  return spawnSync(agent, agentArgs, { stdio: "inherit", env: process.env });
-}
-
-export function wrap(agent: string, agentArgs: string[], dependencies: WrapDependencies = {}): number {
+  let renderer: RendererHandle;
   try {
-    (dependencies.configureHooks ?? configureWrappedAgentHooks)(agent);
+    renderer = dependencies.startRenderer
+      ? dependencies.startRenderer(session.environment, session.environment.LLM_PETS_EVENT_DIR as string)
+      : startFromWrapper(session.environment, spawnSelf, ttys, dependencies.tty ?? controllingTty());
   } catch (error) {
-    console.error(`llm-pet: could not configure hooks for ${agent}: ${error instanceof Error ? error.message : error}`);
+    console.error(`llm-pet: could not start the renderer for ${agent}: ${error instanceof Error ? error.message : error}`);
+    (dependencies.cleanupSession ?? cleanupWrappedSession)(session.directory);
+    return resultCode(await runAgent(agent, agentArgs, environment));
   }
-  (dependencies.startRenderer ?? startFromWrapper)();
-  const result = (dependencies.runAgent ?? runWrappedAgent)(agent, agentArgs);
+
+  try {
+    return resultCode(await runAgent(agent, session.agentArgs, session.environment));
+  } finally {
+    renderer.stop();
+    (dependencies.cleanupSession ?? cleanupWrappedSession)(session.directory);
+  }
+}
+
+function cleanupWrappedSession(directory: string): void {
+  rmSync(directory, { recursive: true, force: true });
+}
+
+function resultCode(result: WrappedAgentResult): number {
   if (result.error) {
     console.error(`llm-pet: ${result.error.message}`);
     return 1;
   }
-  return result.status ?? 1;
+  if (result.status !== null) return result.status;
+  return result.signal ? 128 + os.constants.signals[result.signal] : 1;
 }

@@ -139,13 +139,13 @@ const english: UiStrings = {
     enable: "Enable integration",
     cancel: "Cancel",
     openConfiguration: "Open hook configuration",
-    confirmTitle: (providerLabel) => `Enable ${providerLabel} Hooks integration?`,
+    confirmTitle: () => "Enable Hooks integration?",
     confirmMessage: (hooksPath, scriptPath, providerLabel) =>
-      `LLM Pets will update ${providerLabel} hooks:\n\n• ${hooksPath}\n• ${scriptPath}\n\nIt will preserve existing hooks, add lifecycle commands for this extension, install the receiver script, and switch the global integration mode to Hooks.\n\nThe hook script is fail-open: it writes an event file and exits 0. It never denies, blocks, or rewrites agent tool calls.`,
+      `LLM Pets will reconcile hooks for every available provider, including ${providerLabel}:\n\n- ${hooksPath}\n- ${scriptPath}\n\nIt will preserve unrelated hooks, add lifecycle commands for this extension, install the receiver script, and switch the global integration mode to Hooks.\n\nThe hook script is fail-open: it writes an event file and exits 0. It never denies, blocks, or rewrites agent tool calls.`,
     installedMessage: (providerLabel) =>
-      `Hooks were configured. Start a ${providerLabel} agent session so this view can receive its first event.`,
+      `Available providers were configured. Start a ${providerLabel} agent session so this view can receive its first selected event.`,
     helpMessage: (hooksPath, providerLabel) =>
-      `LLM Pets merged entries into ${hooksPath} for ${providerLabel} and installed hook.cjs under ~/.local/share/llm-pets. Unrelated hooks are left untouched. If events do not appear, reload the window and start a ${providerLabel} agent session.`,
+      `LLM Pets automatically maintains hooks for every available provider allowed by this host. The selected ${providerLabel} listener reads events associated with ${hooksPath}; changing listeners does not edit provider configuration. The extension script is installed as ~/.local/share/llm-pets/extension-hook.cjs, and unrelated hooks are left untouched.`,
     notConfiguredTitle: "Agent activity is not connected",
     notConfiguredBody: "Enable Hooks integration to let this Pet react to agent activity.",
     awaitingTrustTitle: "Waiting for the first hook event",

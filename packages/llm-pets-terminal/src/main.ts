@@ -14,7 +14,7 @@ import { wrap } from "./wrap.js";
 export const BACKEND_NAMES = ["auto", "kitty", "blocks"] as const;
 
 export type Command =
-  | { command: "run"; tty: string; backend: string; pet: string; height: number; rows: number }
+  | { command: "run"; tty: string; backend: string; pet: string; height: number; rows: number; eventDirectory?: string }
   | { command: "probe"; quiet: boolean }
   | { command: "check"; backend: string; pet: string }
   | { command: "pane"; args: tmuxpane.PaneArgs }
@@ -70,7 +70,8 @@ export function parseArgs(argv: string[]): Command {
       backend: flag(args, "--backend") ?? "auto",
       pet,
       height: Number(flag(args, "--height") ?? 75),
-      rows: Number(flag(args, "--rows") ?? DEFAULT_CELL_ROWS)
+      rows: Number(flag(args, "--rows") ?? DEFAULT_CELL_ROWS),
+      eventDirectory: flag(args, "--event-dir")
     };
   }
   if (command === "pane") {
@@ -83,6 +84,7 @@ export function parseArgs(argv: string[]): Command {
         cwd: flag(args, "--cwd"),
         width: Number(flag(args, "--width") ?? 0),
         sourcePane: flag(args, "--source-pane"),
+        eventDirectory: flag(args, "--event-dir"),
         once: args.includes("--once"),
         state: flag(args, "--state"),
         ensure: args.includes("--ensure"),
@@ -169,7 +171,11 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     }
     if (parsed.command === "run") {
       const backend = parsed.backend === "auto" ? selectBackend() : parsed.backend;
-      return run(parsed.tty, backend, parsed.pet, { heightPx: parsed.height, cellRows: parsed.rows });
+      return run(parsed.tty, backend, parsed.pet, {
+        heightPx: parsed.height,
+        cellRows: parsed.rows,
+        eventDirectory: parsed.eventDirectory
+      });
     }
     if (parsed.command === "pane") {
       if (parsed.args.watch) {

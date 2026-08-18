@@ -63,6 +63,7 @@ describe("extension manifest", () => {
       "manual",
       "hooks"
     ]);
+    expect(manifest.contributes.configuration.properties["pet.integrationMode"].default).toBe("hooks");
     expect(manifest.contributes.configuration.properties["pet.hookProvider"].enum).toEqual([
       "cursor",
       "codex",

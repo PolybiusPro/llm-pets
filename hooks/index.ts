@@ -28,7 +28,8 @@ export type HookTransition = {
 };
 
 export type HookEvent = {
-  version: 1;
+  version: 2;
+  provider: HookProvider;
   eventName: HookEventName;
   sessionId: string;
   cwd: string;
@@ -89,7 +90,8 @@ export function parseHookEvent(value: unknown): HookEvent | undefined {
     ? normalizeHookEventName(value.eventName)
     : undefined;
   if (
-    value.version !== 1 ||
+    value.version !== 2 ||
+    !isHookProvider(value.provider) ||
     eventName === undefined ||
     typeof value.sessionId !== "string" ||
     value.sessionId.length === 0 ||
@@ -101,7 +103,8 @@ export function parseHookEvent(value: unknown): HookEvent | undefined {
     return undefined;
   }
   return {
-    version: 1,
+    version: 2,
+    provider: value.provider,
     eventName,
     sessionId: value.sessionId,
     cwd: value.cwd,
@@ -172,8 +175,9 @@ export interface MergePetHooksOptions {
   async?: boolean;
 }
 
-export function hookCommand(scriptPath: string): string {
-  return `node "${scriptPath.replaceAll('"', '\\"')}"`;
+export function hookCommand(scriptPath: string, provider?: HookProvider): string {
+  const command = `node "${scriptPath.replaceAll('"', '\\"')}"`;
+  return provider ? `${command} ${provider}` : command;
 }
 
 export function mergeCursorPetHooks(configuration: unknown, command: string): JsonObject {

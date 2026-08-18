@@ -65,7 +65,7 @@ export async function run(
   tty: string,
   backendName: string,
   petId: string,
-  options: { heightPx?: number; cellRows?: number } = {}
+  options: { heightPx?: number; cellRows?: number; eventDirectory?: string } = {}
 ): Promise<number> {
   if (backendName === "none") {
     return 0;
@@ -86,7 +86,7 @@ export async function run(
     }
     writeHeartbeat(heartbeatPath, resolved, backendName);
     const sheet = await PetSpriteSheet.load(petDirectory(petId));
-    const watcher = new EventWatcher(eventDirectory(), { tty: resolved });
+    const watcher = new EventWatcher(options.eventDirectory ?? eventDirectory(), { tty: resolved });
     const ttyFd = openOverlayTty(resolved);
     const backend = await buildBackend(
       backendName,

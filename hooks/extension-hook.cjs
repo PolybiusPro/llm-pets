@@ -2,10 +2,9 @@
 "use strict";
 
 // LLM Pets hook. Fail-open: write an event file and exit 0.
-// Generated from the root hooks definitions and shared by every renderer.
+// Generated from the root hook definitions for one renderer integration.
 
 const crypto = require("node:crypto");
-const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -39,23 +38,15 @@ const EVENT_ALIASES = {
   "Notification": "Notification"
 };
 const EVENT_RETENTION_MS = 10 * 60 * 1000;
-const RENDERER_NAMES = ["kitty", "sixel", "foot", "mlterm", "wezterm", "ghostty"];
+const HOOK_KIND = "extension";
+const HOOK_PROVIDERS = new Set(["cursor", "codex", "claude"]);
 
-let size = 0;
-const chunks = [];
-process.stdin.on("data", (chunk) => {
-  size += chunk.length;
-  if (size > MAX_INPUT_BYTES) {
-    process.stdin.destroy();
-    return;
-  }
-  chunks.push(chunk);
-});
-
-process.stdin.on("end", () => {
+function handleHookInput(rawInput, provider, environment = process.env) {
   try {
-    if (size > MAX_INPUT_BYTES) return;
-    const input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (!HOOK_PROVIDERS.has(provider)) return;
+    const text = typeof rawInput === "string" ? rawInput : JSON.stringify(rawInput);
+    if (Buffer.byteLength(text, "utf8") > MAX_INPUT_BYTES) return;
+    const input = JSON.parse(text);
     const eventName = EVENT_ALIASES[stringValue(input.hook_event_name, 64)]
       || EVENT_ALIASES[stringValue(input.hookEventName, 64)];
     const sessionId = stringValue(input.conversation_id, 256)
@@ -66,11 +57,13 @@ process.stdin.on("end", () => {
       return;
     }
 
-    const eventDirectory = eventDirectoryPath();
+    const eventDirectory = eventDirectoryPath(provider, environment);
+    if (!eventDirectory) return;
     fs.mkdirSync(eventDirectory, { recursive: true });
 
     const event = {
-      version: 1,
+      version: 2,
+      provider,
       eventName,
       sessionId,
       cwd,
@@ -78,29 +71,54 @@ process.stdin.on("end", () => {
     };
     const tty = controllingTty();
     if (tty) event.tty = tty;
-    const term = stringValue(process.env.TERM, 256);
+    const term = stringValue(environment.TERM, 256);
     if (term) event.term = term;
     const turnId = stringValue(input.turn_id, 256);
     if (turnId) event.turnId = turnId;
 
     writeEvent(eventDirectory, event);
     pruneEvents(eventDirectory);
-    maybeStartRenderer(tty, term);
   } catch {
     // Fail open: never block, deny, or rewrite agent tool calls.
   }
-});
+}
 
-function stateHome() {
-  const configured = process.env.XDG_STATE_HOME?.trim();
+if (require.main === module) {
+  let size = 0;
+  const chunks = [];
+  process.stdin.on("data", (chunk) => {
+    size += chunk.length;
+    if (size > MAX_INPUT_BYTES) {
+      process.stdin.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  process.stdin.on("end", () => {
+    if (size <= MAX_INPUT_BYTES) {
+      handleHookInput(Buffer.concat(chunks).toString("utf8"), process.argv[2]);
+    }
+  });
+}
+
+module.exports = { handleHookInput };
+
+function stateHome(environment) {
+  const configured = environment.XDG_STATE_HOME?.trim();
   return configured ? path.resolve(configured) : path.join(os.homedir(), ".local", "state");
 }
 
-function eventDirectoryPath() {
-  const configured = process.env.LLM_PETS_EVENT_DIR?.trim()
-    || process.env.CURSOR_PET_EVENT_DIR?.trim();
-  if (configured) return path.resolve(configured);
-  return path.join(stateHome(), "llm-pets", "events");
+function eventDirectoryPath(provider, environment) {
+  if (HOOK_KIND === "terminal") {
+    const configured = environment.LLM_PETS_EVENT_DIR?.trim();
+    return configured ? path.resolve(configured) : undefined;
+  }
+  const configured = environment.LLM_PETS_EXTENSION_EVENT_DIR?.trim()
+    || environment.CURSOR_PET_EVENT_DIR?.trim();
+  const root = configured
+    ? path.resolve(configured)
+    : path.join(stateHome(environment), "llm-pets", "extension-events");
+  return path.join(root, provider);
 }
 
 function writeEvent(eventDirectory, event) {
@@ -179,48 +197,4 @@ function parentPid(pid) {
   } catch {
     return 0;
   }
-}
-
-function rendererPath() {
-  const configured = process.env.LLM_PETS_BIN?.trim();
-  if (configured) return path.resolve(configured);
-  return path.join(os.homedir(), ".local", "bin", "llm-pet");
-}
-
-function maybeStartRenderer(tty, term) {
-  const renderer = rendererPath();
-  if (!fs.existsSync(renderer)) return;
-
-  if (process.env.TMUX) {
-    const child = spawn(renderer, ["pane", "--watch"], {
-      detached: true,
-      env: process.env,
-      stdio: "ignore"
-    });
-    child.on("error", () => {});
-    child.unref();
-    return;
-  }
-
-  if (!tty) return;
-  const hint = `${term || ""} ${process.env.TERM_PROGRAM || ""}`;
-  if (RENDERER_NAMES.some((name) => hint.toLowerCase().includes(name))) return;
-
-  const runtimeDirectory = path.join(stateHome(), "llm-pets", "runtime");
-  fs.mkdirSync(runtimeDirectory, { recursive: true });
-  const key = crypto.createHash("sha256").update(tty).digest("hex").slice(0, 16);
-  const heartbeat = path.join(runtimeDirectory, `${key}.heartbeat`);
-  try {
-    if (Date.now() - fs.statSync(heartbeat).mtimeMs < 3000) return;
-  } catch {
-    // A missing or stale heartbeat means the renderer should be started.
-  }
-
-  const child = spawn(renderer, ["run", "--tty", tty], {
-    detached: true,
-    env: process.env,
-    stdio: "ignore"
-  });
-  child.on("error", () => {});
-  child.unref();
 }

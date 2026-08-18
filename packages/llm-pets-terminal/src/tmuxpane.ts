@@ -21,6 +21,7 @@ export type PaneArgs = {
   cwd?: string;
   width: number;
   sourcePane?: string;
+  eventDirectory?: string;
   once?: boolean;
   state?: string;
   ensure?: boolean;
@@ -153,6 +154,7 @@ export async function openPetPane(
     args.position,
     "--cwd",
     realpathSync(args.cwd || process.cwd()),
+    ...(args.eventDirectory ? ["--event-dir", args.eventDirectory] : []),
     "--source-pane",
     sourcePane
   ]
@@ -234,10 +236,11 @@ export async function render(args: PaneArgs): Promise<number> {
     }
   }
   const sheet = await PetSpriteSheet.load(petDirectory(args.pet));
-  const watcher = new EventWatcher(eventDirectory(), { cwd: args.cwd });
+  const watcher = new EventWatcher(args.eventDirectory ?? eventDirectory(), { cwd: args.cwd });
   const petPane = process.env.TMUX_PANE;
   process.stdout.write("\x1b[?1049h\x1b[?25l");
   const animator = new Animator(sheet);
+  let nextHostCheckAt = 0;
   let running = true;
   const stop = (): void => {
     running = false;
@@ -249,6 +252,10 @@ export async function render(args: PaneArgs): Promise<number> {
     while (running) {
       watcher.poll();
       const now = performance.now() / 1000;
+      if (args.sourcePane && now >= nextHostCheckAt) {
+        nextHostCheckAt = now + 1;
+        if (!paneHasAgent(args.sourcePane)) break;
+      }
       const [state, index] = animator.frame(args.state || watcher.state(), now);
       const frames = sheet.croppedFrames(state);
       const frame = frames[Math.min(index, frames.length - 1)] ?? frames[0];

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
@@ -36,15 +37,20 @@ export function isCursorHost(appName?: string, uriScheme?: string): boolean {
 }
 
 export function hookProvidersForHost(cursorHost: boolean): HookProvider[] {
-  return cursorHost ? ["cursor"] : HOOK_PROVIDERS.filter((provider) => provider !== "cursor");
+  return cursorHost ? [...HOOK_PROVIDERS] : HOOK_PROVIDERS.filter((provider) => provider !== "cursor");
 }
 
-export function hookProvidersToUninstall(keep: HookProvider, cursorHost: boolean): HookProvider[] {
-  const managed = hookProvidersForHost(cursorHost);
-  if (!managed.includes(keep)) {
-    return [];
-  }
-  return managed.filter((provider) => provider !== keep);
+export function availableHookProvidersForHost(
+  cursorHost: boolean,
+  environment: NodeJS.ProcessEnv = process.env,
+  homeDirectory = os.homedir(),
+  exists: (path: string) => boolean = existsSync
+): HookProvider[] {
+  return hookProvidersForHost(cursorHost).filter((provider) =>
+    provider === "cursor" && cursorHost
+      ? true
+      : exists(resolveHookProviderTarget(provider, environment, homeDirectory).homeDirectory)
+  );
 }
 
 export function resolveHookProviderForHost(configured: unknown, cursorHost: boolean): HookProvider {

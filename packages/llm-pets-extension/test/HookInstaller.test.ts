@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 describe("HookInstaller", () => {
-  it("detects installation, preserves existing hooks, and leaves the shared script", async () => {
+  it("detects installation, preserves existing hooks, and leaves the extension script", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "cursor-pet-installer-"));
     temporaryDirectories.push(root);
     const bundledScript = path.join(root, "bundled.cjs");
@@ -30,11 +30,11 @@ describe("HookInstaller", () => {
     const installer = new HookInstaller(
       resolveHookProviderTarget("cursor", { CURSOR_HOME: root }, root),
       bundledScript,
-      path.join(root, "share", "llm-pets", "hook.cjs")
+      path.join(root, "share", "llm-pets", "extension-hook.cjs")
     );
 
     expect(installer.hooksPath).toBe(path.join(root, "hooks.json"));
-    expect(installer.scriptPath).toBe(path.join(root, "share", "llm-pets", "hook.cjs"));
+    expect(installer.scriptPath).toBe(path.join(root, "share", "llm-pets", "extension-hook.cjs"));
     expect(await installer.isInstalled()).toBe(false);
     await installer.install();
     expect(await installer.isInstalled()).toBe(true);
@@ -69,7 +69,7 @@ describe("HookInstaller", () => {
     const installer = new HookInstaller(
       resolveHookProviderTarget("claude", { CLAUDE_CONFIG_DIR: root }, root),
       bundledScript,
-      path.join(root, "share", "llm-pets", "hook.cjs")
+      path.join(root, "share", "llm-pets", "extension-hook.cjs")
     );
 
     expect(installer.hooksPath).toBe(path.join(root, "settings.json"));
@@ -80,7 +80,8 @@ describe("HookInstaller", () => {
     expect(installed.hooks.Stop).toHaveLength(2);
     expect(installed.hooks.PreToolUse[0].hooks[0]).toMatchObject({
       type: "command",
-      command: expect.stringContaining("hook.cjs")
+      command: expect.stringMatching(/extension-hook\.cjs\" claude$/),
+      async: true
     });
   });
 });

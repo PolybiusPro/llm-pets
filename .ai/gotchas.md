@@ -39,20 +39,25 @@ Codex home is fallback so existing Dude installs still work.
 invent `~/.cursor/pets`. Do not modify `~/.codex/pets` from this tooling
 unless the user asks to edit a pet.
 
-## One hook script, one event directory
+## Extension and terminal hooks are deliberately separate
 
-The extension and terminal share `hooks/hook.cjs`.
-It writes `~/.local/state/llm-pets/events/` (`$LLM_PETS_EVENT_DIR` overrides).
-Install places the script at `~/.local/share/llm-pets/hook.cjs`. Do not add a
-second hook or a `~/.cursor/pet-viewer/events/` spool.
+The extension installs `extension-hook.cjs` persistently and writes provider
+subdirectories below `~/.local/state/llm-pets/extension-events/`.
+`LLM_PETS_EXTENSION_EVENT_DIR` overrides that root; `CURSOR_PET_EVENT_DIR` is
+deprecated extension-only compatibility. The wrapper injects
+`terminal-hook.cjs` for one Codex or Claude invocation and reserves
+`LLM_PETS_EVENT_DIR` for its private runtime spool. Neither hook starts a
+renderer.
 
 ## Hook JSON is merged, never replaced
 
-Install and uninstall rewrite only this extension’s command entries. Cursor
-uses a flat hook entry; Codex and Claude use nested entries. Claude’s
-`settings.json` does not get a schema `version` field. Installing one
-provider removes this extension’s handlers from the other two. Leave every
-unrelated hook untouched. The hook script is fail-open and dependency-free.
+Extension install and uninstall rewrite only extension-managed command
+entries. Cursor uses a flat hook entry; Codex and Claude use nested entries.
+Claude's `settings.json` does not get a schema `version` field. Hooks mode
+reconciles all available providers independently; VS Code-compatible hosts
+never touch Cursor configuration. Provider selection changes only the
+The receiver ensures that terminal wrapping does not persist active hook registrations.
+Both scripts are fail-open and dependency-free, leaving every unrelated hook untouched.
 
 ## Cursor has no waiting hook
 
@@ -60,10 +65,11 @@ unrelated hook untouched. The hook script is fail-open and dependency-free.
 does not include a permission hook. Waiting animations come from Codex or
 Claude.
 
-## Stale and out-of-workspace extension events are dropped
+## Valid extension events are immutable until retention
 
-Spool files older than five minutes are deleted. Events whose `cwd` is not
-under an open workspace root are ignored. Invalid JSON is deleted.
+Files that are older than five minutes and contain invalid JSON are deleted, while valid files are retained.
+remain so multiple extension windows can observe them; receivers use an
+Events outside an open workspace root are ignored.
 
 ## Sprite sheets cannot escape the pet folder
 
@@ -111,19 +117,21 @@ reintroduce it.
 number. Matching on the path fails to find Claude, and the daemon exits
 after startup grace.
 
-## Two start paths, two skip lists
+## The wrapper owns terminal setup and cleanup
 
-`llm-pet wrap` skips `sixel|foot|mlterm`. Inside tmux it starts
-`pane --ensure`. `hook.cjs` starts `pane --watch` inside tmux, and skips
-`kitty|wezterm|ghostty` for the overlay. Both are flock’d. Inside tmux the
-pet is a dedicated pane drawn with `src/backends/blocks.ts`. Do not remove
-that backend.
+`llm-pet wrap` skips non-TTY invocations, `sixel|foot|mlterm`, Claude
+The `--bare`/`--safe-mode` flags, along with explicit Codex hook-disable overrides, can be used inside.
+tmux it starts `pane --ensure` with the session event path; outside tmux it
+The agent exits, the wrapper closes the overlay child handle.
+The tmux pet remains a dedicated pane after the renderer removes the spool.
+drawn with `src/backends/blocks.ts`.
 
 ## Adding a terminal event fails quietly
 
 There is one table: `hooks/definitions.json`. It owns aliases,
-canonical transitions, settle timing, and provider event lists. Regenerate
-`hook.cjs` after changing it; the root check fails if the script is stale.
+The system must regenerate canonical transitions, settle timing, and provider event lists.
+both entrypoints and the Claude plugin definition after changing it; the root
+The check fails if a generated asset has become outdated.
 
 ## Cell size is a guess
 

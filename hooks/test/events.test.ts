@@ -13,7 +13,7 @@ import {
 } from "../index.js";
 
 function event(eventName: HookEventName, sessionId = "session-a", occurredAt = 1000): HookEvent {
-  return { version: 1, eventName, sessionId, cwd: "/workspace", occurredAt };
+  return { version: 2, provider: "codex", eventName, sessionId, cwd: "/workspace", occurredAt };
 }
 
 describe("shared hook protocol", () => {
@@ -45,7 +45,8 @@ describe("shared hook protocol", () => {
   it("validates the spool contract and tracks aggregate state", () => {
     const parsed = parseHookEvent({ ...event("PreToolUse"), eventName: "preToolUse" });
     expect(parsed?.eventName).toBe("PreToolUse");
-    expect(parseHookEvent({ ...event("PreToolUse"), version: 2 })).toBeUndefined();
+    expect(parseHookEvent({ ...event("PreToolUse"), version: 1 })).toBeUndefined();
+    expect(parseHookEvent({ ...event("PreToolUse"), provider: "gemini" })).toBeUndefined();
 
     const tracker = new HookStateTracker();
     expect(tracker.handle(event("PreToolUse", "running")).state).toBe("running");

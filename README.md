@@ -131,9 +131,9 @@ Arcade, Autumn Forest, Blue Sky, Cozy Office, Engineering Office, Grassland, Jap
 
 ### Agent integration
 
-Default mode is `manual`. Settings: **LLM Pets: Integration Mode** (`manual` or `hooks`) and **LLM Pets: Hook Provider** (`cursor`, `codex`, or `claude`). Cursor has no waiting hook; Codex and Claude map `PermissionRequest` to waiting.
+Default mode is `hooks`. Settings: **LLM Pets: Integration Mode** (`manual` or `hooks`) and **LLM Pets: Hook Provider** (`cursor`, `codex`, or `claude`). The provider setting selects the event stream the view listens to; changing it never edits hook configuration. Cursor has no waiting hook; Codex and Claude map `PermissionRequest` to waiting.
 
-When a pet is visible and hooks are not configured, the PET view offers **Enable integration**. That merges this extension’s handlers into the selected agent’s user hook file, installs the shared `hook.cjs` at `~/.local/share/llm-pets/hook.cjs`, and sets mode to `hooks`. Installing one provider removes this extension’s handlers from the other two. Unrelated third-party hooks stay. The script is fail-open: write an event file, exit 0. It never denies, blocks, or rewrites tool calls.
+In Hooks mode, activation installs `~/.local/share/llm-pets/extension-hook.cjs` and reconciles every available provider independently. Cursor hosts configure Cursor unconditionally and Codex or Claude when their home directories exist. VS Code-compatible hosts configure available Codex and Claude homes and never inspect or modify Cursor hooks. Unrelated hooks stay, and one provider failure does not block the others. The script is fail-open: write an event file and exit 0. It never starts a renderer or denies, blocks, or rewrites tool calls.
 
 | Provider | Configuration file        |
 | -------- | ------------------------- |
@@ -151,7 +151,7 @@ postToolUseFailure / PostToolUseFailure             -> failed (hold ~5s, then id
 stop / Stop, afterAgentResponse, sessionEnd         -> review (hold ~3s, then idle)
 ```
 
-Several sessions: `failed > waiting > running > review > idle`. Event files go to `~/.local/state/llm-pets/events/`. Stale or invalid files are ignored. **LLM Pets: Uninstall Hooks Integration** removes only this extension’s handlers.
+Several sessions: `failed > waiting > running > review > idle`. Hook events use protocol version 2 and require `provider: "cursor" | "codex" | "claude"`. Extension events go to `~/.local/state/llm-pets/extension-events/<provider>/`; `LLM_PETS_EXTENSION_EVENT_DIR` overrides the root, while `CURSOR_PET_EVENT_DIR` remains a deprecated fallback. Valid files remain until retention pruning so concurrent windows can observe them. **LLM Pets: Uninstall Hooks Integration**, or Manual mode, removes only extension-managed entries allowed for the current host.
 
 ### Commands and settings
 
@@ -168,20 +168,20 @@ Command Palette: search **LLM Pets**. Viewer: Change Pet / Background / Animatio
 | `pet.animationSpeed`             | `1`         | 0.25–3                                           |
 | `pet.pauseWhenHidden`            | `true`      | Pause while the view is hidden                   |
 | `pet.watchPetDirectory`          | `true`      | Reload after file changes                        |
-| `pet.integrationMode`            | `manual`    | `manual` or `hooks`                              |
-| `pet.hookProvider`               | `cursor`    | `cursor`, `codex`, or `claude`                   |
+| `pet.integrationMode`            | `hooks`     | `manual` or `hooks`                              |
+| `pet.hookProvider`               | `cursor`    | Event listener: `cursor`, `codex`, or `claude`   |
 
 ### Troubleshooting
 
 No pet: **LLM Pets: Open Pets Directory**, check `pet.json` and `spritesheetPath`, then **Output: LLM Pets**.
 
-No agent reaction: `integrationMode` is `hooks`, `hookProvider` matches the agent, **Open Hooks Configuration** shows this extension’s command, reload after hook edits, reinstall if the extension path changed.
+No agent reaction: `integrationMode` is `hooks`, `hookProvider` selects the running agent, and **Open Hooks Configuration** shows this extension's command. A selected provider reports not configured when its home is absent or reconciliation failed.
 
 Size: `pet.scale` or right-click → **Change Pet Size** → **Auto**.
 
 ### Privacy
 
-No telemetry. Pet files, hook events, and workspace paths are not sent to an extension-owned server. Webview roots are the extension and resolved pet directories. Sprite paths cannot leave their pet folder. Hook files change only after an explicit install or uninstall.
+No telemetry. Pet files, hook events, and workspace paths are not sent to an extension-owned server. Webview roots are the extension and resolved pet directories. Sprite paths cannot leave their pet folder. In Hooks mode, eligible provider files are reconciled on activation; Manual mode is the persistent opt-out.
 
 ---
 
@@ -190,7 +190,7 @@ No telemetry. Pet files, hook events, and workspace paths are not sent to an ext
 `packages/llm-pets-terminal`. An animated sprite in the same Linux terminal as **Codex** or **Claude Code**. It idles while you think, runs while the agent works, waits on permission, and erases itself when the agent exits.
 
 ```
-agent hook  ->  ~/.local/state/llm-pets/events/*.json  ->  renderer  ->  your terminal
+session hook  ->  $XDG_RUNTIME_DIR/llm-pets-UID/session-*/events/*.json  ->  renderer  ->  your terminal
 ```
 
 | event | state |
@@ -223,13 +223,16 @@ Node.js 24+, pnpm `11.22.0`. Native builds: `sharp` (sprites) and `koffi` (flock
 pnpm llm-pets install terminal
 ```
 
-That compiles the renderer and links three files, leaving this checkout as the source of truth:
+The compilation process now links the inert runtime assets, making this checkout the definitive source of truth.
 
 ```
-~/.local/bin/llm-pet              -> dist/main.js
-~/.local/share/llm-pets/hook.cjs  -> hooks/hook.cjs
-~/.bashrc.d/llm-pets.sh           wraps `codex` / `claude` via `llm-pet wrap`
+~/.local/bin/llm-pet                                  -> dist/main.js
+~/.local/share/llm-pets/terminal-hook.cjs              -> hooks/terminal-hook.cjs
+~/.local/share/llm-pets/claude-terminal-plugin         -> claude-plugin/
+~/.bashrc.d/llm-pets.sh                                wraps `codex` / `claude` via `llm-pet wrap`
 ```
+
+The wrapper never persists active hooks in `~/.codex/hooks.json` or `~/.claude/settings.json`. For an interactive supported terminal it creates a mode-0700 session directory, injects Codex `-c hooks.<Event>=...` overrides plus `--dangerously-bypass-hook-trust`, or prepends Claude's session-only `--plugin-dir`, and gives the same event directory to the renderer. Non-TTY, unsupported, `--bare`/`--safe-mode`, explicitly hook-disabled, and failed-setup launches run unchanged.
 
 ```sh
 llm-pet check                   # pet, backend, event feed
@@ -243,13 +246,13 @@ Sprite lookup: `$LLM_PETS_PET_DIR`, then `~/.pets/<id>/`, then `~/.local/share/l
 
 | what | where |
 | --- | --- |
-| events | `~/.local/state/llm-pets/events/` |
+| session events | `$XDG_RUNTIME_DIR/llm-pets-UID/session-*/events/` (system temp fallback) |
 | locks, heartbeats | `~/.local/state/llm-pets/runtime/` |
 | log | `~/.local/state/llm-pets/renderer.log` |
 | rendered frames | `~/.cache/llm-pets/frames/` |
 | probe results | `~/.cache/llm-pets/graphics-*.json` |
 
-Events older than ten minutes are pruned. The renderer exits when no `codex` or `claude` process is attached to its tty (match on process *name* from `/proc/<pid>/stat`, not the executable path — Claude Code’s basename is a version number) and erases the sprite on the way out.
+The wrapper terminates its overlay child or closes its marked tmux pane when the agent exits, then removes the session spool. Later starts prune abandoned session directories; process-tree detection remains fallback cleanup after an unexpected wrapper death. Events older than ten minutes are pruned. The renderer exits when no `codex` or `claude` process is attached to its tty (match on process *name* from `/proc/<pid>/stat`, not the executable path - Claude Code's basename is a version number) and erases the sprite on the way out.
 
 ---
 

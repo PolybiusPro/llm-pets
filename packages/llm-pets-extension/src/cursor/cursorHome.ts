@@ -25,19 +25,34 @@ export function getStateHome(
   return configured ? path.resolve(configured) : path.join(homeDirectory, ".local", "state");
 }
 
-export function getHookScriptInstallPath(
+export function getExtensionHookScriptInstallPath(
+  environment: NodeJS.ProcessEnv = process.env,
+  homeDirectory = os.homedir()
+): string {
+  return path.join(getDataHome(environment, homeDirectory), "llm-pets", "extension-hook.cjs");
+}
+
+export function getLegacyHookScriptInstallPath(
   environment: NodeJS.ProcessEnv = process.env,
   homeDirectory = os.homedir()
 ): string {
   return path.join(getDataHome(environment, homeDirectory), "llm-pets", "hook.cjs");
 }
 
-export function getEventDirectory(
+export function getExtensionEventRoot(
   environment: NodeJS.ProcessEnv = process.env,
   homeDirectory = os.homedir()
 ): string {
-  const configured = environment.LLM_PETS_EVENT_DIR?.trim()
+  const configured = environment.LLM_PETS_EXTENSION_EVENT_DIR?.trim()
     || environment.CURSOR_PET_EVENT_DIR?.trim();
   if (configured) return path.resolve(configured);
-  return path.join(getStateHome(environment, homeDirectory), "llm-pets", "events");
+  return path.join(getStateHome(environment, homeDirectory), "llm-pets", "extension-events");
+}
+
+export function getExtensionEventDirectory(
+  provider: string,
+  environment: NodeJS.ProcessEnv = process.env,
+  homeDirectory = os.homedir()
+): string {
+  return path.join(getExtensionEventRoot(environment, homeDirectory), provider);
 }

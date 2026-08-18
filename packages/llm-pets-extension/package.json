@@ -321,7 +321,7 @@
             "%integration.manual%",
             "%integration.hooks%"
           ],
-          "default": "manual",
+          "default": "hooks",
           "description": "%config.integrationMode%"
         },
         "pet.hookProvider": {

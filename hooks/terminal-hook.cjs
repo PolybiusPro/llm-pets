@@ -10,9 +10,35 @@ const os = require("node:os");
 const path = require("node:path");
 
 const MAX_INPUT_BYTES = 1024 * 1024;
-const EVENT_ALIASES = /*__EVENT_ALIASES__*/;
+const EVENT_ALIASES = {
+  "sessionStart": "SessionStart",
+  "SessionStart": "SessionStart",
+  "beforeSubmitPrompt": "UserPromptSubmit",
+  "UserPromptSubmit": "UserPromptSubmit",
+  "preToolUse": "PreToolUse",
+  "PreToolUse": "PreToolUse",
+  "postToolUse": "PostToolUse",
+  "PostToolUse": "PostToolUse",
+  "postToolUseFailure": "PostToolUseFailure",
+  "PostToolUseFailure": "PostToolUseFailure",
+  "afterAgentThought": "AfterAgentThought",
+  "AfterAgentThought": "AfterAgentThought",
+  "afterAgentResponse": "AfterAgentResponse",
+  "AfterAgentResponse": "AfterAgentResponse",
+  "permissionRequest": "PermissionRequest",
+  "PermissionRequest": "PermissionRequest",
+  "stop": "Stop",
+  "Stop": "Stop",
+  "sessionEnd": "SessionEnd",
+  "SessionEnd": "SessionEnd",
+  "PreCompact": "PreCompact",
+  "PostCompact": "PostCompact",
+  "SubagentStart": "SubagentStart",
+  "SubagentStop": "SubagentStop",
+  "Notification": "Notification"
+};
 const EVENT_RETENTION_MS = 10 * 60 * 1000;
-const HOOK_KIND = /*__HOOK_KIND__*/;
+const HOOK_KIND = "terminal";
 const HOOK_PROVIDERS = new Set(["cursor", "codex", "claude"]);
 
 function handleHookInput(rawInput, provider, environment = process.env) {

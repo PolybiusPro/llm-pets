@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
+import type { HookProvider } from "./hookProvider.js";
 import type { PetState } from "../pet/types.js";
 import {
   HookEventStateTracker,
@@ -10,6 +11,7 @@ import {
 
 export interface HookEventReceiverOptions {
   eventDirectory: string;
+  provider: HookProvider;
   workspaceRoots: readonly string[];
   log(message: string): void;
   onPetState(state: PetState): void;
@@ -19,6 +21,7 @@ export interface HookEventReceiverOptions {
 export class HookEventReceiver implements vscode.Disposable {
   private readonly tracker = new HookEventStateTracker();
   private readonly settleTimers = new Map<string, NodeJS.Timeout>();
+  private readonly seen = new Set<string>();
   private watcher: vscode.FileSystemWatcher | undefined;
   private disposed = false;
 
@@ -44,11 +47,13 @@ export class HookEventReceiver implements vscode.Disposable {
     this.watcher = undefined;
     for (const timer of this.settleTimers.values()) clearTimeout(timer);
     this.settleTimers.clear();
+    this.seen.clear();
     this.tracker.reset();
   }
 
   private async process(eventPath: string): Promise<void> {
-    if (this.disposed) return;
+    if (this.disposed || this.seen.has(eventPath)) return;
+    this.seen.add(eventPath);
     let raw: string;
     try {
       raw = await fs.readFile(eventPath, "utf8");
@@ -75,6 +80,10 @@ export class HookEventReceiver implements vscode.Disposable {
       await fs.unlink(eventPath).catch(() => undefined);
       return;
     }
+    if (event.provider !== this.options.provider) {
+      this.options.log(`Ignored ${event.provider} Hook event in ${this.options.provider} spool.`);
+      return;
+    }
     if (!isWithinWorkspace(event.cwd, this.options.workspaceRoots)) return;
 
     const transition = this.tracker.handle(event);
@@ -92,6 +101,5 @@ export class HookEventReceiver implements vscode.Disposable {
       }, transition.settleAfterMs);
       this.settleTimers.set(event.sessionId, timer);
     }
-    await fs.unlink(eventPath).catch(() => undefined);
   }
 }

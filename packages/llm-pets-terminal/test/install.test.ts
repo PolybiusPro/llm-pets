@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { BASHRC_MARKER, install, uninstall } from "../src/install.js";
+import { BASHRC_MARKER, install, removeLegacyPersistentHooks, uninstall } from "../src/install.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let home: string | undefined;
@@ -16,12 +16,15 @@ afterEach(() => {
 });
 
 describe("install", () => {
-  it("links the renderer and writes the bashrc wrapper", () => {
+  it("links inert runtime assets and writes the bashrc wrapper", () => {
     home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
     install({ home, repoRoot });
     expect(readlinkSync(path.join(home, ".local", "bin", "llm-pet"))).toBe(path.join(repoRoot, "dist", "main.js"));
-    expect(readlinkSync(path.join(home, ".local", "share", "llm-pets", "hook.cjs"))).toBe(
-      path.resolve(repoRoot, "..", "..", "hooks", "hook.cjs")
+    expect(readlinkSync(path.join(home, ".local", "share", "llm-pets", "terminal-hook.cjs"))).toBe(
+      path.resolve(repoRoot, "..", "..", "hooks", "terminal-hook.cjs")
+    );
+    expect(readlinkSync(path.join(home, ".local", "share", "llm-pets", "claude-terminal-plugin"))).toBe(
+      path.join(repoRoot, "claude-plugin")
     );
     const bashrc = readFileSync(path.join(home, ".bashrc.d", "llm-pets.sh"), "utf8");
     expect(bashrc).toContain(BASHRC_MARKER);
@@ -55,5 +58,37 @@ describe("install", () => {
     uninstall({ home: dir, repoRoot });
     expect(() => readlinkSync(path.join(dir, ".local", "bin", "llm-pet"))).toThrow();
     expect(() => readFileSync(path.join(dir, ".bashrc.d", "llm-pets.sh"))).toThrow();
+  });
+
+  it("removes only legacy persistent shared-hook commands", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
+    home = dir;
+    const command = `node \"${path.join(dir, ".local", "share", "llm-pets", "hook.cjs")}\"`;
+    const codexConfig = path.join(dir, ".codex", "hooks.json");
+    const claudeConfig = path.join(dir, ".claude", "settings.json");
+    for (const configPath of [codexConfig, claudeConfig]) {
+      mkdirSync(path.dirname(configPath), { recursive: true });
+      writeFileSync(configPath, JSON.stringify({
+        theme: "dark",
+        hooks: {
+          PreToolUse: [
+            { hooks: [{ type: "command", command: "unrelated" }] },
+            { hooks: [{ type: "command", command }] }
+          ]
+        }
+      }));
+    }
+
+    expect(removeLegacyPersistentHooks(dir, { HOME: dir })).toEqual([codexConfig, claudeConfig]);
+    for (const configPath of [codexConfig, claudeConfig]) {
+      const configured = JSON.parse(readFileSync(configPath, "utf8")) as {
+        theme: string;
+        hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+      };
+      expect(configured.theme).toBe("dark");
+      expect(configured.hooks.PreToolUse).toEqual([
+        { hooks: [{ type: "command", command: "unrelated" }] }
+      ]);
+    }
   });
 });

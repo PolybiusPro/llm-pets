@@ -12,4 +12,4 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
-packages/llm-pets-extension/scripts/hook.cjs
+packages/llm-pets-extension/scripts/extension-hook.cjs

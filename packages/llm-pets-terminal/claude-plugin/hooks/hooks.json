@@ -1,0 +1,108 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$LLM_PETS_TERMINAL_HOOK\" claude",
+            "timeout": 5,
+            "statusMessage": "LLM Pets",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

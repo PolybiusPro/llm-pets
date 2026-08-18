@@ -18,7 +18,8 @@ export class HookInstaller {
   public constructor(
     private readonly target: HookProviderTarget,
     private readonly bundledScriptPath: string,
-    private readonly installedScriptPath: string
+    private readonly installedScriptPath: string,
+    private readonly legacyScriptPath?: string
   ) {}
 
   public get hooksPath(): string {
@@ -31,7 +32,7 @@ export class HookInstaller {
 
   public async isInstalled(): Promise<boolean> {
     const existing = await readConfiguration(this.hooksPath);
-    if (!hasPetHooks(existing, hookCommand(this.scriptPath), this.target.events)) return false;
+    if (!hasPetHooks(existing, hookCommand(this.scriptPath, this.target.provider), this.target.events)) return false;
     try {
       await fs.access(this.scriptPath);
       return true;
@@ -41,18 +42,27 @@ export class HookInstaller {
     }
   }
 
-  public async install(): Promise<HookInstallResult> {
-    const hooksPath = this.hooksPath;
+  public async installScript(): Promise<void> {
     const installedScriptPath = this.scriptPath;
     await fs.mkdir(path.dirname(installedScriptPath), { recursive: true });
     const temporaryScriptPath = `${installedScriptPath}.llm-pet-${process.pid}.tmp`;
     await fs.copyFile(this.bundledScriptPath, temporaryScriptPath);
     await fs.rename(temporaryScriptPath, installedScriptPath);
-    const command = hookCommand(installedScriptPath);
+  }
+
+  public async install(copyScript = true): Promise<HookInstallResult> {
+    const hooksPath = this.hooksPath;
+    const installedScriptPath = this.scriptPath;
+    if (copyScript) await this.installScript();
+    const command = hookCommand(installedScriptPath, this.target.provider);
     const existing = await readConfiguration(hooksPath);
-    await atomicWriteJson(hooksPath, mergePetHooks(existing, command, this.target.events, {
+    const migrated = this.legacyScriptPath
+      ? removePetHooks(existing, hookCommand(this.legacyScriptPath))
+      : existing;
+    await atomicWriteJson(hooksPath, mergePetHooks(migrated, command, this.target.events, {
       entryStyle: this.target.entryStyle,
-      setSchemaVersion: this.target.setSchemaVersion
+      setSchemaVersion: this.target.setSchemaVersion,
+      async: this.target.entryStyle === "nested"
     }));
     return { hooksPath, scriptPath: installedScriptPath, command };
   }
@@ -60,9 +70,13 @@ export class HookInstaller {
   public async uninstall(): Promise<HookInstallResult> {
     const hooksPath = this.hooksPath;
     const installedScriptPath = this.scriptPath;
-    const command = hookCommand(installedScriptPath);
+    const command = hookCommand(installedScriptPath, this.target.provider);
     const existing = await readConfiguration(hooksPath);
-    await atomicWriteJson(hooksPath, removePetHooks(existing, command));
+    const withoutCurrent = removePetHooks(existing, command);
+    const removed = this.legacyScriptPath
+      ? removePetHooks(withoutCurrent, hookCommand(this.legacyScriptPath))
+      : withoutCurrent;
+    await atomicWriteJson(hooksPath, removed);
     return { hooksPath, scriptPath: installedScriptPath, command };
   }
 }

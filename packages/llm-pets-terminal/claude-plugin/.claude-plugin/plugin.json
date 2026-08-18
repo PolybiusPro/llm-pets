@@ -1,0 +1,5 @@
+{
+  "name": "llm-pets-terminal",
+  "version": "1.0.0",
+  "description": "Session-scoped lifecycle hooks for the LLM Pets terminal renderer."
+}

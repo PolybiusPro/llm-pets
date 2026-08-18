@@ -5,8 +5,8 @@ import * as esbuild from "esbuild";
 
 const here = dirname(fileURLToPath(import.meta.url));
 copyFileSync(
-  join(here, "..", "..", "hooks", "hook.cjs"),
-  join(here, "scripts", "hook.cjs")
+  join(here, "..", "..", "hooks", "extension-hook.cjs"),
+  join(here, "scripts", "extension-hook.cjs")
 );
 
 const watch = process.argv.includes("--watch");

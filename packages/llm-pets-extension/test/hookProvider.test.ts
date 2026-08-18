@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   CLAUDE_HOOK_EVENTS,
   CODEX_HOOK_EVENTS,
+  availableHookProvidersForHost,
   isCursorHost,
   isHookProvider,
   hookProvidersForHost,
-  hookProvidersToUninstall,
   nextHookProvider,
   resolveHookProviderForHost,
   resolveHookProviderTarget
@@ -53,14 +53,21 @@ describe("cursor host", () => {
   });
 
   it("keeps Cursor and VS Code hook files on separate hosts", () => {
-    expect(hookProvidersForHost(true)).toEqual(["cursor"]);
+    expect(hookProvidersForHost(true)).toEqual(["cursor", "codex", "claude"]);
     expect(hookProvidersForHost(false)).toEqual(["codex", "claude"]);
+  });
+
+  it("installs only providers whose homes exist, with Cursor available in its host", () => {
+    const existing = new Set([path.join("/home/tester", ".codex")]);
+    const exists = (candidate: string) => existing.has(candidate);
+    expect(availableHookProvidersForHost(true, {}, "/home/tester", exists)).toEqual(["cursor", "codex"]);
+    expect(availableHookProvidersForHost(false, {}, "/home/tester", exists)).toEqual(["codex"]);
   });
 
   it("does not keep a Cursor provider selection in VS Code", () => {
     expect(resolveHookProviderForHost("cursor", true)).toBe("cursor");
     expect(resolveHookProviderForHost("cursor", false)).toBe("codex");
-    expect(resolveHookProviderForHost("codex", true)).toBe("cursor");
+    expect(resolveHookProviderForHost("codex", true)).toBe("codex");
     expect(resolveHookProviderForHost("codex", false)).toBe("codex");
     expect(resolveHookProviderForHost("claude", false)).toBe("claude");
     expect(resolveHookProviderForHost("nope", true)).toBe("cursor");
@@ -71,14 +78,7 @@ describe("cursor host", () => {
     expect(nextHookProvider("codex", false)).toBe("claude");
     expect(nextHookProvider("claude", false)).toBe("codex");
     expect(nextHookProvider("cursor", false)).toBe("claude");
-    expect(nextHookProvider("cursor", true)).toBe("cursor");
+    expect(nextHookProvider("cursor", true)).toBe("codex");
     expect(nextHookProvider("claude", true)).toBe("cursor");
-  });
-
-  it("does not uninstall the other host's hook files", () => {
-    expect(hookProvidersToUninstall("codex", false)).toEqual(["claude"]);
-    expect(hookProvidersToUninstall("claude", false)).toEqual(["codex"]);
-    expect(hookProvidersToUninstall("cursor", true)).toEqual([]);
-    expect(hookProvidersToUninstall("codex", true)).toEqual([]);
   });
 });
