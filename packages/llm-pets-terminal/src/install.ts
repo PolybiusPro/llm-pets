@@ -98,14 +98,14 @@ export function install(options: { home?: string; repoRoot?: string } = {}): voi
   writeBashrc(links.shell, repoRoot, sources.hook);
   const hook = links.hook;
   console.log("");
-  console.log("Add the hook to your agents:");
+  console.log("The wrapper merges hooks for the agent it launches:");
   console.log("");
   console.log("  Codex   ~/.codex/hooks.json");
   console.log("  Claude  ~/.claude/settings.json");
   console.log("");
   console.log(`Both run:  node ${hook}`);
   console.log("");
-  console.log("Then check the setup with:  llm-pet check");
+  console.log("Start codex or claude, then check the setup with:  llm-pet check");
 }
 
 export function uninstall(options: { home?: string; repoRoot?: string } = {}): void {

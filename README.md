@@ -231,29 +231,6 @@ That compiles the renderer and links three files, leaving this checkout as the s
 ~/.bashrc.d/llm-pets.sh           wraps `codex` / `claude` via `llm-pet wrap`
 ```
 
-Then register the hook with your agents. **Claude Code** (`~/.claude/settings.json`) — for each of `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `SubagentStop`, `PreCompact`, `Stop`, `SessionEnd`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ~/.local/share/llm-pets/hook.cjs 2>/dev/null || true",
-            "timeout": 5,
-            "async": true
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-`async` keeps the hook off the critical path. `|| true` means a broken pet cannot block the agent. **Codex** (`~/.codex/hooks.json`) uses the same command on the events Codex emits.
-
 ```sh
 llm-pet check                   # pet, backend, event feed
 llm-pet probe                   # kitty graphics

@@ -169,6 +169,7 @@ export class HookStateTracker {
 export interface MergePetHooksOptions {
   entryStyle: HookEntryStyle;
   setSchemaVersion?: boolean;
+  async?: boolean;
 }
 
 export function hookCommand(scriptPath: string): string {
@@ -195,7 +196,7 @@ export function mergePetHooks(
   for (const eventName of events) {
     const entries = Array.isArray(hooks[eventName]) ? hooks[eventName] as unknown[] : [];
     const withoutOldEntries = removeCommandFromEntries(entries, command);
-    withoutOldEntries.push(makeHookEntry(command, options.entryStyle));
+    withoutOldEntries.push(makeHookEntry(command, options.entryStyle, options.async));
     hooks[eventName] = withoutOldEntries;
   }
   return root;
@@ -232,10 +233,16 @@ export function hasPetHooks(
   });
 }
 
-function makeHookEntry(command: string, entryStyle: HookEntryStyle): JsonObject {
+function makeHookEntry(command: string, entryStyle: HookEntryStyle, asyncHook = false): JsonObject {
   if (entryStyle === "flat") return { command, timeout: 5 };
   return {
-    hooks: [{ type: "command", command, timeout: 5, statusMessage: "LLM Pets" }]
+    hooks: [{
+      type: "command",
+      command,
+      timeout: 5,
+      statusMessage: "LLM Pets",
+      ...(asyncHook ? { async: true } : {})
+    }]
   };
 }
 
