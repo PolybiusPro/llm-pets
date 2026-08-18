@@ -62,7 +62,7 @@ export class HookInstaller {
     await atomicWriteJson(hooksPath, mergePetHooks(migrated, command, this.target.events, {
       entryStyle: this.target.entryStyle,
       setSchemaVersion: this.target.setSchemaVersion,
-      async: this.target.entryStyle === "nested"
+      async: this.target.provider === "claude"
     }));
     return { hooksPath, scriptPath: installedScriptPath, command };
   }

@@ -84,4 +84,24 @@ describe("HookInstaller", () => {
       async: true
     });
   });
+
+  it("installs synchronous nested hooks for Codex", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "codex-pet-installer-"));
+    temporaryDirectories.push(root);
+    const bundledScript = path.join(root, "bundled.cjs");
+    await fs.writeFile(bundledScript, "process.stdin.resume();\n", "utf8");
+    const installer = new HookInstaller(
+      resolveHookProviderTarget("codex", { CODEX_HOME: root }, root),
+      bundledScript,
+      path.join(root, "share", "llm-pets", "extension-hook.cjs")
+    );
+
+    await installer.install();
+    const installed = JSON.parse(await fs.readFile(installer.hooksPath, "utf8"));
+    expect(installed.hooks.PreToolUse[0].hooks[0]).toMatchObject({
+      type: "command",
+      command: expect.stringMatching(/extension-hook\.cjs\" codex$/)
+    });
+    expect(installed.hooks.PreToolUse[0].hooks[0]).not.toHaveProperty("async");
+  });
 });
