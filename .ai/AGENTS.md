@@ -54,7 +54,7 @@ Standing rules live here. Load the rest on demand:
 - Pets: `~/.pets` first, then Codex home. Do not invent `~/.cursor/pets`. Do not modify files under `~/.codex/pets` unless the user asks to edit a pet.
 - Keep the package ESM at the workspace root (`"type": "module"`). Extension host code is still bundled as CJS by esbuild (`format: "cjs"`) because VS Code’s extension entry is CommonJS.
 - Use pnpm for Node installs and scripts. Mixing npm/yarn would fork the lockfile.
-- Do not add root `AGENTS.md` or `CLAUDE.md`. Agent instructions stay under `.ai/`.
+- Keep detailed agent instructions under `.ai/`; the root `AGENTS.md` is only a router into this directory. Do not add `CLAUDE.md`.
 - Headless Vitest is not enough for the renderer. Confirm Konsole ± tmux (`pnpm test:terminal:visual`).
 - Do not commit unless the user asks. Do not commit or push implementation work directly to `main`. Create a branch, implement there, then merge into `main`.
 - Do not add AI attribution, `Co-Authored-By` trailers, or `Generated with` lines. Preserve upstream license and attribution.
