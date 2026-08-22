@@ -49,9 +49,9 @@ describe("wrapperAction", () => {
 });
 
 describe("startFromWrapper", () => {
-  it("passes the session event directory to a tmux pane", () => {
+  it("passes the session event directory to a tmux pane", async () => {
     const spawned: string[][] = [];
-    startFromWrapper(
+    await startFromWrapper(
       { TMUX: "1" },
       (args) => {
         spawned.push(args);
@@ -64,9 +64,9 @@ describe("startFromWrapper", () => {
     expect(spawned).toEqual([["pane", "--ensure", "--event-dir", "/tmp/llm-pets-session/events"]]);
   });
 
-  it("owns and terminates an overlay child", () => {
+  it("owns and terminates an overlay child", async () => {
     const killed: string[] = [];
-    const handle = startFromWrapper(
+    const handle = await startFromWrapper(
       {},
       () => ({ kill: (signal: string) => { killed.push(signal); return true; } }) as unknown as ChildProcess,
       { stdin: true, stdout: true },
@@ -102,6 +102,7 @@ describe("session hooks", () => {
     for (const eventName of CODEX_HOOK_EVENTS) {
       expect(result.args).toContainEqual(expect.stringContaining(`hooks.${eventName}=`));
     }
+    expect(result.args.join(" ")).not.toContain("async = true");
     expect(result.args.join(" ")).toContain(`node \\"${result.scriptPath}\\" codex`);
   });
 

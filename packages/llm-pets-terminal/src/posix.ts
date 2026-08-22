@@ -11,6 +11,7 @@ const Winsize = koffi.struct("winsize", {
 
 const ioctl = libc.func("int ioctl(int fd, unsigned long request, void *)");
 const flock = libc.func("int flock(int fd, int operation)");
+const tcflush = libc.func("int tcflush(int fd, int queue_selector)");
 
 const posixOpenpt = libc.func("int posix_openpt(int flags)");
 const grantpt = libc.func("int grantpt(int fd)");
@@ -24,9 +25,18 @@ const O_RDWR = 2;
 const O_NOCTTY = 256;
 const LOCK_EX = 2;
 const LOCK_NB = 4;
+const TCIFLUSH = 0;
 
 export function tryFlockExclusive(fd: number): boolean {
   return flock(fd, LOCK_EX | LOCK_NB) === 0;
+}
+
+// Discards any bytes the kernel is still holding in the fd's input queue.
+// A terminal reply that arrives after we've stopped listening for it (probe
+// timeout, or we already got the answer we needed) would otherwise sit there
+// and surface later as literal text, to whichever process reads the fd next.
+export function flushInput(fd: number): void {
+  tcflush(fd, TCIFLUSH);
 }
 
 export function terminalSize(fd: number): { rows: number; columns: number } {

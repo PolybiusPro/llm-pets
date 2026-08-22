@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync, writeSync } from "n
 import { stdin, stdout } from "node:process";
 import path from "node:path";
 import { cacheRoot } from "./paths.js";
-import { terminalSize } from "./posix.js";
+import { flushInput, terminalSize } from "./posix.js";
 
 export const CELL_WIDTH_PX = 8;
 export const CELL_HEIGHT_PX = 15;
@@ -85,7 +85,7 @@ export function storeProbe(supported: boolean, environment: NodeJS.Dict<string> 
   }
 }
 
-export function probeKittyGraphics(timeout = 0.5): boolean | undefined {
+export async function probeKittyGraphics(timeout = 0.5): Promise<boolean | undefined> {
   if (!stdin.isTTY || !stdout.isTTY) {
     return undefined;
   }
@@ -97,7 +97,7 @@ export function probeKittyGraphics(timeout = 0.5): boolean | undefined {
   try {
     stdin.setRawMode(true);
     stdout.write(query);
-    const reply = readReply(timeout);
+    const reply = await readReply(stdin, timeout);
     if (reply.includes("_G")) {
       return reply.includes(";OK");
     }
@@ -108,6 +108,16 @@ export function probeKittyGraphics(timeout = 0.5): boolean | undefined {
   } catch {
     return undefined;
   } finally {
+    // Whatever we didn't manage to read (a slow DA reply after we already
+    // classified the graphics reply, or the whole thing after a timeout) is
+    // still sitting in the kernel's input queue for this fd. Left alone, it
+    // surfaces later as literal text to whichever process reads next -
+    // codex's prompt, or the shell once codex exits. Discard it here instead.
+    try {
+      flushInput(typeof stdin.fd === "number" ? stdin.fd : 0);
+    } catch {
+      // Best effort; not fatal if the platform binding is unavailable.
+    }
     try {
       stdin.setRawMode(previous);
     } catch {
@@ -116,22 +126,53 @@ export function probeKittyGraphics(timeout = 0.5): boolean | undefined {
   }
 }
 
-function readReply(timeout: number): string {
-  const start = Date.now();
-  let reply = Buffer.alloc(0);
-  stdin.resume();
-  while ((Date.now() - start) / 1000 < timeout) {
-    const chunk = stdin.read() as Buffer | null;
-    if (chunk) {
-      reply = Buffer.concat([reply, chunk]);
-      const text = reply.toString("binary");
-      if (text.includes("\x1b[?") && text.trimEnd().endsWith("c")) {
-        break;
+// Drains a terminal reply asynchronously, event-driven, instead of busy-polling.
+// A busy `while` loop never yields to the event loop, so it can only see bytes
+// that were already buffered before it started; anything the terminal sends
+// mid-probe arrives after the caller gives up and leaks into whatever reads
+// the tty next. Waiting on "readable" lets libuv deliver each chunk as it lands.
+export function readReply(source: NodeJS.ReadableStream, timeout: number): Promise<string> {
+  return new Promise((resolve) => {
+    let reply = Buffer.alloc(0);
+    let timer: NodeJS.Timeout;
+    const onReadable = (): void => {
+      let chunk: Buffer | null;
+      while ((chunk = source.read() as Buffer | null) !== null) {
+        reply = Buffer.concat([reply, chunk]);
+        const text = reply.toString("binary");
+        if (text.includes("\x1b[?") && text.trimEnd().endsWith("c")) {
+          finish();
+          return;
+        }
       }
-    }
+    };
+    const finish = (): void => {
+      clearTimeout(timer);
+      source.off("readable", onReadable);
+      source.pause();
+      resolve(reply.toString("binary"));
+    };
+    timer = setTimeout(finish, timeout * 1000);
+    source.on("readable", onReadable);
+  });
+}
+
+// Probes at most once per terminal identity: a cached answer (written by an
+// earlier probe, or by the explicit `llm-pet probe` command) is trusted as-is
+// instead of re-querying the tty on every invocation.
+export async function ensureProbed(
+  environment: NodeJS.Dict<string> = process.env,
+  probe: (timeout?: number) => Promise<boolean | undefined> = probeKittyGraphics
+): Promise<boolean | undefined> {
+  const cached = cachedProbe(environment);
+  if (cached !== undefined) {
+    return cached;
   }
-  stdin.pause();
-  return reply.toString("binary");
+  const result = await probe();
+  if (result !== undefined) {
+    storeProbe(result, environment);
+  }
+  return result;
 }
 
 export function kittySupported(environment: NodeJS.Dict<string> = process.env): boolean {

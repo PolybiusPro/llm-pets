@@ -16,7 +16,7 @@ import {
   hookProviderDefinition,
   type HookProvider
 } from "../../../hooks/index.js";
-import { probeKittyGraphics, storeProbe } from "./terminal.js";
+import { ensureProbed } from "./terminal.js";
 
 export const WRAPPER_SKIP = /sixel|foot|mlterm/i;
 
@@ -100,7 +100,7 @@ function pruneSessionDirectories(root: string): void {
 }
 
 function codexHookValue(command: string): string {
-  return `[{ hooks = [{ type = "command", command = ${JSON.stringify(command)}, timeout = 5, statusMessage = "LLM Pets", async = true }] }]`;
+  return `[{ hooks = [{ type = "command", command = ${JSON.stringify(command)}, timeout = 5, statusMessage = "LLM Pets" }] }]`;
 }
 
 export function terminalHookArguments(
@@ -186,13 +186,13 @@ export function controllingTty(): string | undefined {
   return undefined;
 }
 
-export function startFromWrapper(
+export async function startFromWrapper(
   env: NodeJS.ProcessEnv = process.env,
   spawnRenderer: (args: string[], environment: NodeJS.ProcessEnv) => ChildProcess | undefined = spawnSelf,
   ttys = { stdin: Boolean(process.stdin.isTTY), stdout: Boolean(process.stdout.isTTY) },
   tty = controllingTty(),
   eventDirectory = env.LLM_PETS_EVENT_DIR
-): RendererHandle {
+): Promise<RendererHandle> {
   const action = wrapperAction(env, ttys);
   if (action === "skip") {
     return { stop: () => undefined };
@@ -207,10 +207,7 @@ export function startFromWrapper(
       }
     };
   }
-  const probed = probeKittyGraphics();
-  if (probed !== undefined) {
-    storeProbe(probed, env);
-  }
+  await ensureProbed(env);
   if (tty?.startsWith("/dev/pts/")) {
     const args = ["run", "--tty", tty];
     if (eventDirectory) args.push("--event-dir", eventDirectory);
@@ -296,7 +293,7 @@ export async function wrap(
   try {
     renderer = dependencies.startRenderer
       ? dependencies.startRenderer(session.environment, session.environment.LLM_PETS_EVENT_DIR as string)
-      : startFromWrapper(session.environment, spawnSelf, ttys, dependencies.tty ?? controllingTty());
+      : await startFromWrapper(session.environment, spawnSelf, ttys, dependencies.tty ?? controllingTty());
   } catch (error) {
     console.error(`llm-pet: could not start the renderer for ${agent}: ${error instanceof Error ? error.message : error}`);
     (dependencies.cleanupSession ?? cleanupWrappedSession)(session.directory);

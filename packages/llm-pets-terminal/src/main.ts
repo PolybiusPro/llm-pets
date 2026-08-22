@@ -130,7 +130,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return 0;
     }
     if (parsed.command === "probe") {
-      const result = probeKittyGraphics();
+      const result = await probeKittyGraphics();
       if (result === undefined) {
         if (!parsed.quiet) {
           console.log("no answer from the terminal; leaving the cached result alone");
