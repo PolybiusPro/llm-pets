@@ -7,7 +7,8 @@ import {
   readdirSync,
   readlinkSync,
   rmSync,
-  statSync
+  statSync,
+  writeSync
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,9 +17,12 @@ import {
   hookProviderDefinition,
   type HookProvider
 } from "../../../hooks/index.js";
+import { flushInput } from "./posix.js";
 import { ensureProbed } from "./terminal.js";
 
 export const WRAPPER_SKIP = /sixel|foot|mlterm/i;
+const CODEX_TERMINAL_RESET = Buffer.from("\x1b[<u\x1b[>4;0m");
+const CODEX_EXIT_INPUT_GRACE_MS = 50;
 
 export type WrapperAction = "pane" | "overlay" | "skip";
 export type WrappedHookProvider = Exclude<HookProvider, "cursor">;
@@ -50,6 +54,7 @@ export type WrapDependencies = {
     agentArgs: string[],
     environment: NodeJS.ProcessEnv
   ) => WrappedAgentResult | Promise<WrappedAgentResult>;
+  restoreCodexTerminal?: () => void | Promise<void>;
   cleanupSession?: (directory: string) => void;
 };
 
@@ -265,6 +270,25 @@ function runWrappedAgent(
   });
 }
 
+async function restoreCodexTerminal(): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return;
+  }
+  try {
+    writeSync(typeof process.stdout.fd === "number" ? process.stdout.fd : 1, CODEX_TERMINAL_RESET);
+  } catch {
+    // Codex may have exited because the terminal disappeared.
+  }
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, CODEX_EXIT_INPUT_GRACE_MS);
+  });
+  try {
+    flushInput(typeof process.stdin.fd === "number" ? process.stdin.fd : 0);
+  } catch {
+    // Best effort; the reset above still prevents later release reports.
+  }
+}
+
 export async function wrap(
   agent: string,
   agentArgs: string[],
@@ -277,8 +301,20 @@ export async function wrap(
     stdout: Boolean(process.stdout.isTTY)
   };
   const runAgent = dependencies.runAgent ?? runWrappedAgent;
+  const invokeAgent = async (
+    invocationArgs: string[],
+    invocationEnvironment: NodeJS.ProcessEnv
+  ): Promise<WrappedAgentResult> => {
+    try {
+      return await runAgent(agent, invocationArgs, invocationEnvironment);
+    } finally {
+      if (provider === "codex" && ttys.stdin && ttys.stdout) {
+        await (dependencies.restoreCodexTerminal ?? restoreCodexTerminal)();
+      }
+    }
+  };
   if (!provider || wrapperAction(environment, ttys) === "skip" || hooksExplicitlyDisabled(provider, agentArgs)) {
-    return resultCode(await runAgent(agent, agentArgs, environment));
+    return resultCode(await invokeAgent(agentArgs, environment));
   }
 
   let session: WrappedSession;
@@ -286,7 +322,7 @@ export async function wrap(
     session = (dependencies.createSession ?? createWrappedSession)(provider, agentArgs, environment);
   } catch (error) {
     console.error(`llm-pet: could not configure session hooks for ${agent}: ${error instanceof Error ? error.message : error}`);
-    return resultCode(await runAgent(agent, agentArgs, environment));
+    return resultCode(await invokeAgent(agentArgs, environment));
   }
 
   let renderer: RendererHandle;
@@ -297,11 +333,11 @@ export async function wrap(
   } catch (error) {
     console.error(`llm-pet: could not start the renderer for ${agent}: ${error instanceof Error ? error.message : error}`);
     (dependencies.cleanupSession ?? cleanupWrappedSession)(session.directory);
-    return resultCode(await runAgent(agent, agentArgs, environment));
+    return resultCode(await invokeAgent(agentArgs, environment));
   }
 
   try {
-    return resultCode(await runAgent(agent, session.agentArgs, session.environment));
+    return resultCode(await invokeAgent(session.agentArgs, session.environment));
   } finally {
     renderer.stop();
     (dependencies.cleanupSession ?? cleanupWrappedSession)(session.directory);

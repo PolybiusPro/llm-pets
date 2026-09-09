@@ -127,6 +127,31 @@ describe("session hooks", () => {
 });
 
 describe("wrap", () => {
+  it("restores Codex terminal input after exit without changing Claude cleanup", async () => {
+    const calls: string[] = [];
+    const runAgent = (agent: string) => {
+      calls.push("agent:" + agent);
+      return { status: 0 };
+    };
+    const restoreCodexTerminal = () => {
+      calls.push("terminal:restore");
+    };
+
+    expect(await wrap("codex", ["--disable=hooks"], {
+      environment: {},
+      ttys: { stdin: true, stdout: true },
+      runAgent,
+      restoreCodexTerminal
+    })).toBe(0);
+    expect(await wrap("claude", ["--safe-mode"], {
+      environment: {},
+      ttys: { stdin: true, stdout: true },
+      runAgent,
+      restoreCodexTerminal
+    })).toBe(0);
+    expect(calls).toEqual(["agent:codex", "terminal:restore", "agent:claude"]);
+  });
+
   it("starts hooks and renderer for the session, then cleans both up", async () => {
     const calls: string[] = [];
     const result = await wrap("claude", ["--version"], {
