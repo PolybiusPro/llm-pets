@@ -28,7 +28,8 @@ export function parseInstallManifest(value: unknown, fallbackSlug: string): Pars
       throw new Error(`files[${index}] is invalid`);
     }
     const file = entry as Record<string, unknown>;
-    const name = typeof file.name === "string" ? file.name : "";
+    const label = file.path ?? file.name;
+    const name = typeof label === "string" ? label : "";
     const url = typeof file.url === "string" ? file.url : "";
     if (!ALLOWED_NAMES.has(name)) {
       throw new Error(`file name not allowed: ${name || "(empty)"}`);
