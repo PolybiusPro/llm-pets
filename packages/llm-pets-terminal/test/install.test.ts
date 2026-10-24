@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +30,36 @@ describe("install", () => {
     expect(bashrc).toContain(BASHRC_MARKER);
     expect(bashrc).toContain("llm-pet wrap codex");
     expect(bashrc).toContain("llm-pet wrap claude");
+  });
+
+  it("writes fish wrapper functions when a fish config dir exists", () => {
+    home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
+    mkdirSync(path.join(home, ".config", "fish"), { recursive: true });
+    install({ home, repoRoot });
+    const functions = path.join(home, ".config", "fish", "functions");
+    for (const agent of ["codex", "claude"]) {
+      const fish = readFileSync(path.join(functions, `${agent}.fish`), "utf8");
+      expect(fish).toContain(BASHRC_MARKER);
+      expect(fish).toContain(`function ${agent} --wraps ${agent}`);
+      expect(fish).toContain(`command llm-pet wrap ${agent} $argv`);
+    }
+  });
+
+  it("does not create a fish config dir for non-fish users", () => {
+    home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
+    install({ home, repoRoot });
+    expect(() => readdirSync(path.join(home!, ".config", "fish"))).toThrow();
+  });
+
+  it("uninstalls the fish functions it wrote but not a user's own", () => {
+    home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
+    const functions = path.join(home, ".config", "fish", "functions");
+    mkdirSync(functions, { recursive: true });
+    install({ home, repoRoot });
+    writeFileSync(path.join(functions, "claude.fish"), "function claude; echo mine; end\n");
+    uninstall({ home, repoRoot });
+    expect(() => readFileSync(path.join(functions, "codex.fish"))).toThrow();
+    expect(readFileSync(path.join(functions, "claude.fish"), "utf8")).toContain("echo mine");
   });
 
   it("refuses to replace a non-symlink", () => {
