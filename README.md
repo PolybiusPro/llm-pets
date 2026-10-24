@@ -230,6 +230,7 @@ The compilation process now links the inert runtime assets, making this checkout
 ~/.local/share/llm-pets/terminal-hook.cjs              -> hooks/terminal-hook.cjs
 ~/.local/share/llm-pets/claude-terminal-plugin         -> claude-plugin/
 ~/.bashrc.d/llm-pets.sh                                wraps `codex` / `claude` via `llm-pet wrap`
+~/.config/fish/functions/{codex,claude}.fish           same wrappers for fish (only if ~/.config/fish exists)
 ```
 
 The wrapper never persists active hooks in `~/.codex/hooks.json` or `~/.claude/settings.json`. For an interactive supported terminal it creates a mode-0700 session directory, injects Codex `-c hooks.<Event>=...` overrides plus `--dangerously-bypass-hook-trust`, or prepends Claude's session-only `--plugin-dir`, and gives the same event directory to the renderer. Non-TTY, unsupported, `--bare`/`--safe-mode`, explicitly hook-disabled, and failed-setup launches run unchanged.

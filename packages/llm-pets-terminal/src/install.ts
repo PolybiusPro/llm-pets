@@ -1,4 +1,5 @@
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -20,12 +21,24 @@ codex() { command llm-pet wrap codex "$@"; }
 claude() { command llm-pet wrap claude "$@"; }
 `;
 
+export function fishSnippet(agent: "codex" | "claude"): string {
+  return `# ${BASHRC_MARKER}. Do not edit.
+function ${agent} --wraps ${agent}
+    command llm-pet wrap ${agent} $argv
+end
+`;
+}
+
 export type InstallPaths = {
   bin: string;
   hook: string;
   plugin: string;
   shell: string;
+  fishCodex: string;
+  fishClaude: string;
 };
+
+type LinkSources = Omit<InstallPaths, "shell" | "fishCodex" | "fishClaude">;
 
 function defaultHome(): string {
   return process.env.HOME?.trim() || os.homedir();
@@ -34,8 +47,13 @@ function defaultHome(): string {
 export function installTargets(
   repoRoot: string,
   home = defaultHome()
-): { links: InstallPaths; sources: Omit<InstallPaths, "shell"> } {
+): { links: InstallPaths; sources: LinkSources } {
   const dataHome = process.env.XDG_DATA_HOME?.trim() || path.join(home, ".local", "share");
+  const fishFunctions = path.join(
+    process.env.XDG_CONFIG_HOME?.trim() || path.join(home, ".config"),
+    "fish",
+    "functions"
+  );
   return {
     sources: {
       bin: path.join(repoRoot, "dist", "main.js"),
@@ -46,7 +64,9 @@ export function installTargets(
       bin: path.join(home, ".local", "bin", "llm-pet"),
       hook: path.join(dataHome, "llm-pets", "terminal-hook.cjs"),
       plugin: path.join(dataHome, "llm-pets", "claude-terminal-plugin"),
-      shell: path.join(home, ".bashrc.d", "llm-pets.sh")
+      shell: path.join(home, ".bashrc.d", "llm-pets.sh"),
+      fishCodex: path.join(fishFunctions, "codex.fish"),
+      fishClaude: path.join(fishFunctions, "claude.fish")
     }
   };
 }
@@ -101,6 +121,21 @@ function writeBashrc(target: string, repoRoot: string, hookSource?: string): voi
   console.log(`  ${target} (wraps codex and claude)`);
 }
 
+function writeFish(
+  target: string,
+  agent: "codex" | "claude",
+  repoRoot: string,
+  hookSource?: string
+): void {
+  mkdirSync(path.dirname(target), { recursive: true });
+  if (!replaceable(target, repoRoot, hookSource)) {
+    throw new Error(`refusing to replace non-symlink: ${target}`);
+  }
+  rmSync(target, { force: true });
+  writeFileSync(target, fishSnippet(agent));
+  console.log(`  ${target} (wraps ${agent} for fish)`);
+}
+
 export function install(options: { home?: string; repoRoot?: string } = {}): void {
   const repoRoot = options.repoRoot ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const home = options.home ?? defaultHome();
@@ -110,6 +145,10 @@ export function install(options: { home?: string; repoRoot?: string } = {}): voi
   link(sources.hook, links.hook, repoRoot, sources.hook);
   link(sources.plugin, links.plugin, repoRoot, sources.hook);
   writeBashrc(links.shell, repoRoot, sources.hook);
+  if (existsSync(path.dirname(path.dirname(links.fishCodex)))) {
+    writeFish(links.fishCodex, "codex", repoRoot, sources.hook);
+    writeFish(links.fishClaude, "claude", repoRoot, sources.hook);
+  }
   removeLegacyPersistentHooks(home);
   console.log("");
   console.log("Hooks are injected only into wrapped Codex and Claude sessions.");
