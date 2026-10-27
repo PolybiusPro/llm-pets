@@ -7,7 +7,7 @@ export type CliCommand =
       overwrite: boolean;
       petsDir?: string;
     }
-  | { command: "install"; target: "extension" | "extension-windows" | "terminal" };
+  | { command: "install"; target: "extension" | "extension-windows" | "terminal"; noTmux?: boolean };
 
 export function parseArgs(argv: string[]): CliCommand {
   const args = [...argv];
@@ -49,7 +49,15 @@ export function parseArgs(argv: string[]): CliCommand {
     if (target !== "extension" && target !== "extension-windows" && target !== "terminal") {
       throw new Error("install requires extension, extension-windows, or terminal");
     }
-    return { command: "install", target };
+    const flags = args.splice(0);
+    if (flags.includes("--no-tmux") && target !== "terminal") {
+      throw new Error("--no-tmux only applies to install terminal");
+    }
+    const unknown = flags.find((flag) => flag !== "--no-tmux");
+    if (unknown) {
+      throw new Error(`unknown flag: ${unknown}`);
+    }
+    return flags.length > 0 ? { command: "install", target, noTmux: true } : { command: "install", target };
   }
 
   throw new Error(`unknown command: ${command}`);

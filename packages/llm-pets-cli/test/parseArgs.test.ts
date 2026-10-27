@@ -32,6 +32,16 @@ describe("parseArgs", () => {
     expect(parseArgs(["install", "terminal"])).toEqual({ command: "install", target: "terminal" });
   });
 
+  it("parses --no-tmux for the terminal target only", () => {
+    expect(parseArgs(["install", "terminal", "--no-tmux"])).toEqual({
+      command: "install",
+      target: "terminal",
+      noTmux: true
+    });
+    expect(() => parseArgs(["install", "extension", "--no-tmux"])).toThrow(/install terminal/i);
+    expect(() => parseArgs(["install", "terminal", "--bogus"])).toThrow(/unknown flag/i);
+  });
+
   it("ignores a leading -- from pnpm script forwarding", () => {
     expect(parseArgs(["--", "install", "terminal"])).toEqual({ command: "install", target: "terminal" });
     expect(parseArgs(["--", "--help"])).toEqual({ command: "help" });

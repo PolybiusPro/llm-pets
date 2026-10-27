@@ -10,7 +10,7 @@ Usage:
   llm-pets get <slug> [--registry codexpethub|petdex|<url>] [--overwrite] [--pets-dir <dir>]
   llm-pets install extension
   llm-pets install extension-windows
-  llm-pets install terminal
+  llm-pets install terminal [--no-tmux]
   llm-pets --help
 
 Pets are written to ~/.pets/<slug>/. The extension and terminal look there
@@ -30,7 +30,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return 0;
     }
     const startDir = path.dirname(fileURLToPath(import.meta.url));
-    await installPackage(command.target, { startDir });
+    await installPackage(command.target, { startDir, noTmux: command.noTmux });
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

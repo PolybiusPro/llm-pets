@@ -19,7 +19,7 @@ export type Command =
   | { command: "check"; backend: string; pet: string }
   | { command: "pane"; args: tmuxpane.PaneArgs }
   | { command: "wrap"; agent: string; agentArgs: string[] }
-  | { command: "install" }
+  | { command: "install"; noTmux: boolean }
   | { command: "uninstall" }
   | { command: "help" };
 
@@ -42,7 +42,7 @@ export function parseArgs(argv: string[]): Command {
   }
   const command = args.shift();
   if (command === "install") {
-    return { command: "install" };
+    return { command: "install", noTmux: args.includes("--no-tmux") };
   }
   if (command === "uninstall") {
     return { command: "uninstall" };
@@ -122,7 +122,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       return 0;
     }
     if (parsed.command === "install") {
-      install();
+      install({ noTmux: parsed.noTmux });
       return 0;
     }
     if (parsed.command === "uninstall") {

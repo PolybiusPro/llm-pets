@@ -62,6 +62,25 @@ describe("install", () => {
     expect(readFileSync(path.join(functions, "claude.fish"), "utf8")).toContain("echo mine");
   });
 
+  it("writes the tmux opt-out only with noTmux and clears it on a plain install", () => {
+    home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
+    const config = path.join(home, ".config", "llm-pets", "terminal.json");
+    install({ home, repoRoot });
+    expect(() => readFileSync(config)).toThrow();
+    install({ home, repoRoot, noTmux: true });
+    expect(JSON.parse(readFileSync(config, "utf8"))).toEqual({ tmux: false });
+    install({ home, repoRoot });
+    expect(() => readFileSync(config)).toThrow();
+  });
+
+  it("removes the tmux opt-out on uninstall", () => {
+    home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
+    const config = path.join(home, ".config", "llm-pets", "terminal.json");
+    install({ home, repoRoot, noTmux: true });
+    uninstall({ home, repoRoot });
+    expect(() => readFileSync(config)).toThrow();
+  });
+
   it("refuses to replace a non-symlink", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "llm-pets-install-"));
     home = dir;
