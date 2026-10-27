@@ -220,8 +220,11 @@ The daemon writes to a tty the agent owns, so it never reads that tty. Overlay o
 Node.js 24+, pnpm `11.22.0`. Native builds: `sharp` (sprites) and `koffi` (flock / `TIOCGWINSZ`).
 
 ```sh
-pnpm llm-pets install terminal
+pnpm llm-pets install terminal              # pane inside tmux, overlay outside
+pnpm llm-pets install terminal --no-tmux    # never start a pet inside tmux
 ```
+
+`--no-tmux` writes `~/.config/llm-pets/terminal.json` (`{"tmux": false}`), which the wrapper reads at launch, so it applies to every shell. A plain install removes the file again.
 
 The compilation process now links the inert runtime assets, making this checkout the definitive source of truth.
 

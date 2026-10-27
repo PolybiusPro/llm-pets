@@ -35,6 +35,7 @@ export async function installPackage(
     run?: RunCommand;
     which?: WhichCommand;
     platform?: NodeJS.Platform;
+    noTmux?: boolean;
   } = {}
 ): Promise<void> {
   const repoRoot = options.repoRoot ?? findRepoRoot(options.startDir ?? process.cwd());
@@ -52,7 +53,7 @@ export async function installPackage(
       throw new Error(`terminal compile failed with exit code ${compile.status ?? 1}`);
     }
     const mainJs = path.join(repoRoot, "packages", "llm-pets-terminal", "dist", "main.js");
-    const result = run("node", [mainJs, "install"], {
+    const result = run("node", [mainJs, "install", ...(options.noTmux ? ["--no-tmux"] : [])], {
       cwd: path.join(repoRoot, "packages", "llm-pets-terminal")
     });
     if (result.error) {

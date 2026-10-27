@@ -20,7 +20,8 @@ describe("parseArgs", () => {
   });
 
   it("parses install and uninstall", () => {
-    expect(parseArgs(["install"])).toEqual({ command: "install" });
+    expect(parseArgs(["install"])).toEqual({ command: "install", noTmux: false });
+    expect(parseArgs(["install", "--no-tmux"])).toEqual({ command: "install", noTmux: true });
     expect(parseArgs(["uninstall"])).toEqual({ command: "uninstall" });
   });
 

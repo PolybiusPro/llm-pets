@@ -25,6 +25,23 @@ export function dataRoot(): string {
   return path.join(envHome("XDG_DATA_HOME", path.join(home(), ".local", "share")), APPLICATION);
 }
 
+export function terminalConfigPath(
+  env: NodeJS.Dict<string> = process.env,
+  homeDir = env.HOME?.trim() || os.homedir()
+): string {
+  const configHome = env.XDG_CONFIG_HOME?.trim() || path.join(homeDir, ".config");
+  return path.join(configHome, APPLICATION, "terminal.json");
+}
+
+export function tmuxPaneEnabled(env: NodeJS.Dict<string> = process.env): boolean {
+  try {
+    const config = JSON.parse(readFileSync(terminalConfigPath(env), "utf8")) as { tmux?: unknown };
+    return config.tmux !== false;
+  } catch {
+    return true;
+  }
+}
+
 export function eventDirectory(): string {
   const configured = process.env.LLM_PETS_EVENT_DIR?.trim();
   if (configured) {

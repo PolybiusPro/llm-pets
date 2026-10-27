@@ -31,6 +31,15 @@ function installRuntimeAssets(): NodeJS.ProcessEnv {
   return { HOME: home, XDG_RUNTIME_DIR: home };
 }
 
+function tmuxConfigEnv(config?: { tmux: boolean }): NodeJS.ProcessEnv {
+  home = mkdtempSync(path.join(os.tmpdir(), "llm-pets-wrap-"));
+  if (config) {
+    mkdirSync(path.join(home, "llm-pets"), { recursive: true });
+    writeFileSync(path.join(home, "llm-pets", "terminal.json"), JSON.stringify(config));
+  }
+  return { HOME: home, XDG_CONFIG_HOME: home };
+}
+
 describe("wrapperAction", () => {
   it("skips when stdin or stdout is not a tty", () => {
     expect(wrapperAction({}, { stdin: false, stdout: true })).toBe("skip");
@@ -43,8 +52,15 @@ describe("wrapperAction", () => {
   });
 
   it("selects panes inside tmux and overlays outside it", () => {
-    expect(wrapperAction({ TMUX: "/tmp/tmux-1" }, { stdin: true, stdout: true })).toBe("pane");
-    expect(wrapperAction({ TERM: "xterm-256color" }, { stdin: true, stdout: true })).toBe("overlay");
+    const env = tmuxConfigEnv();
+    expect(wrapperAction({ ...env, TMUX: "/tmp/tmux-1" }, { stdin: true, stdout: true })).toBe("pane");
+    expect(wrapperAction({ ...env, TERM: "xterm-256color" }, { stdin: true, stdout: true })).toBe("overlay");
+  });
+
+  it("skips inside tmux when the install disabled the pane", () => {
+    const env = tmuxConfigEnv({ tmux: false });
+    expect(wrapperAction({ ...env, TMUX: "/tmp/tmux-1" }, { stdin: true, stdout: true })).toBe("skip");
+    expect(wrapperAction({ ...env, TERM: "xterm-256color" }, { stdin: true, stdout: true })).toBe("overlay");
   });
 });
 
@@ -52,7 +68,7 @@ describe("startFromWrapper", () => {
   it("passes the session event directory to a tmux pane", async () => {
     const spawned: string[][] = [];
     await startFromWrapper(
-      { TMUX: "1" },
+      { ...tmuxConfigEnv(), TMUX: "1" },
       (args) => {
         spawned.push(args);
         return undefined;
@@ -62,6 +78,21 @@ describe("startFromWrapper", () => {
       "/tmp/llm-pets-session/events"
     );
     expect(spawned).toEqual([["pane", "--ensure", "--event-dir", "/tmp/llm-pets-session/events"]]);
+  });
+
+  it("starts nothing inside tmux when the install disabled the pane", async () => {
+    const spawned: string[][] = [];
+    await startFromWrapper(
+      { ...tmuxConfigEnv({ tmux: false }), TMUX: "1" },
+      (args) => {
+        spawned.push(args);
+        return undefined;
+      },
+      { stdin: true, stdout: true },
+      undefined,
+      "/tmp/llm-pets-session/events"
+    );
+    expect(spawned).toEqual([]);
   });
 
   it("owns and terminates an overlay child", async () => {

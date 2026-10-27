@@ -17,6 +17,7 @@ import {
   hookProviderDefinition,
   type HookProvider
 } from "../../../hooks/index.js";
+import { tmuxPaneEnabled } from "./paths.js";
 import { flushInput } from "./posix.js";
 import { ensureProbed } from "./terminal.js";
 
@@ -174,7 +175,7 @@ export function wrapperAction(
     return "skip";
   }
   if (env.TMUX) {
-    return "pane";
+    return tmuxPaneEnabled(env) ? "pane" : "skip";
   }
   return "overlay";
 }
